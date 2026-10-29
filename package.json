@@ -1,0 +1,17 @@
+{
+  "name": "lovelevel",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test --experimental-test-isolation=none --test-concurrency=1 tests/*.test.mjs",
+    "dev": "NODE_ENV=development PUBLIC_ORIGIN=http://127.0.0.1:3118 ALLOW_REGISTRATION=true node --experimental-sqlite server/index.mjs",
+    "db:generate": "drizzle-kit generate",
+    "start": "node --experimental-sqlite server/index.mjs"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.0",
+    "drizzle-orm": "^0.44.0"
+  }
+}

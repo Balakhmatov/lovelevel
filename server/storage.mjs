@@ -1,0 +1,36 @@
+import { DatabaseSync } from 'node:sqlite';
+import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { open, mkdir, readFile, rename, rm, stat } from 'node:fs/promises';
+import { resolve, dirname, sep } from 'node:path';
+import { randomUUID, createHash } from 'node:crypto';
+
+export function openDatabase(filename, migrations = resolve('drizzle')) {
+  mkdirSync(dirname(resolve(filename)), { recursive: true, mode: 0o700 });
+  const sqlite = new DatabaseSync(filename);
+  sqlite.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;');
+  sqlite.exec('CREATE TABLE IF NOT EXISTS _lovelevel_migrations(name TEXT PRIMARY KEY, hash TEXT NOT NULL, applied TEXT NOT NULL)');
+  for (const file of readdirSync(migrations).filter(f => /^\d+.*\.sql$/.test(f)).sort()) {
+    const sql = readFileSync(resolve(migrations, file), 'utf8');
+    const hash = createHash('sha256').update(sql).digest('hex');
+    const applied = sqlite.prepare('SELECT hash FROM _lovelevel_migrations WHERE name=?').get(file);
+    if (applied) { if (applied.hash !== hash) { sqlite.close(); throw new Error('Applied migration changed: '+file); } continue; }
+    sqlite.exec('BEGIN IMMEDIATE');
+    try { sqlite.exec(sql); sqlite.prepare('INSERT INTO _lovelevel_migrations VALUES(?,?,?)').run(file, hash, new Date().toISOString()); sqlite.exec('COMMIT'); }
+    catch (error) { sqlite.exec('ROLLBACK'); sqlite.close(); throw error; }
+  }
+  const DB = {
+    prepare(sql) { return { args: [], bind(...args) { this.args = args; return this; }, first() { return sqlite.prepare(sql).get(...this.args) || null; }, all() { return {results:sqlite.prepare(sql).all(...this.args)}; }, run() { const r=sqlite.prepare(sql).run(...this.args);return {meta:{changes:Number(r.changes)}}; } }; },
+    async batch(statements) { sqlite.exec('BEGIN IMMEDIATE'); try { const results=[];for (const s of statements)results.push(s.run());sqlite.exec('COMMIT');return results; } catch(error) {sqlite.exec('ROLLBACK');throw error;} }
+  };
+  return {sqlite, DB};
+}
+
+export function diskBucket(directory) {
+  const root=resolve(directory);mkdirSync(root,{recursive:true,mode:0o700});
+  function pathFor(key) { if (!/^photos\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9-]+$/.test(key))throw new Error('Invalid media key');const path=resolve(root,key);if(!path.startsWith(root+sep))throw new Error('Invalid media path');return path; }
+  return {
+    async put(key, bytes) { const path=pathFor(key);await mkdir(dirname(path),{recursive:true,mode:0o700});const temp=path+'.'+randomUUID()+'.tmp';const fd=await open(temp,'wx',0o600);try{await fd.writeFile(bytes);await fd.sync();await fd.close();await rename(temp,path);}catch(error){await fd.close().catch(()=>{});await rm(temp,{force:true});throw error;} },
+    async get(key) { const path=pathFor(key);try {const info=await stat(path);if(!info.isFile()||info.size>5*1024*1024)throw new Error('Invalid media file');return {body:await readFile(path)};}catch(error){if(error.code==='ENOENT')return null;throw error;} },
+    async delete(key) {await rm(pathFor(key),{force:true});}
+  };
+}

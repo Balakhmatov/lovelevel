@@ -1,0 +1,8 @@
+import fs from 'node:fs';
+fs.rmSync('dist',{recursive:true,force:true});fs.mkdirSync('dist/server',{recursive:true});fs.mkdirSync('dist/.openai',{recursive:true});
+let code=fs.readFileSync('src/worker.js','utf8').replace("import { level, age, accessible, rewardTasks, thresholds } from './rules.js';",fs.readFileSync('src/rules.js','utf8').replaceAll('export ',''));
+const html=fs.readFileSync('public/index.html','utf8').replace('/* APP_CSS */',fs.readFileSync('public/style.css','utf8')).replace('/* APP_JS */',fs.readFileSync('public/app.js','utf8'));
+code='const DEMO_PORTRAITS='+JSON.stringify(fs.readFileSync('assets/demo-portraits.jpg').toString('base64'))+';\n'+code;
+code='const HTML='+JSON.stringify(html)+';\n'+code;
+fs.writeFileSync('dist/server/index.js',code);fs.cpSync('drizzle','dist/drizzle',{recursive:true});
+console.log('Built standalone application, embedded UI and database migrations.');
