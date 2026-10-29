@@ -22,9 +22,20 @@ try{
   for(const [name,key] of [['Знакомства','discover'],['Симпатии','matches'],['Сообщения','messages'],['Мой уровень','levels'],['Мой профиль','profile'],['Модерация','admin']]){
    await page.getByRole('button',{name,exact:true}).filter({visible:true}).click();await page.waitForTimeout(100);
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${key}: overflow at ${width}`);
+   assert.equal(await page.locator('body').evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()),'#f7f5f2');
+   if(key!=='admin')assert.equal(await page.locator('.level-panel').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(48, 38, 50)');
    await page.screenshot({path:`outputs/design-${key}-${width}.png`,fullPage:true});
   }
   await page.getByRole('button',{name:'Знакомства',exact:true}).click();await page.getByRole('button',{name:'Посмотреть демо',exact:true}).click();await page.screenshot({path:`outputs/design-demo-${width}.png`,fullPage:true});
+ }
+ h.sqlite.prepare('INSERT INTO profiles VALUES(?,?,?,?,?,?,?,?,?,?,?)').run('design-peer','Анна','1996-01-01','Москва','woman','all','Архитектура, кино и поездки на выходные.','Знакомства и общение','["Кино"]',new Date().toISOString(),0);
+ for(const [a,b] of [['design-owner','design-peer'],['design-peer','design-owner']])h.sqlite.prepare('INSERT INTO likes VALUES(?,?,?)').run(a,b,new Date().toISOString());
+ h.sqlite.prepare('INSERT INTO messages VALUES(?,?,?,?,?)').run('design-message','design-peer','design-owner','Привет! Какой фильм посоветуешь посмотреть?',new Date().toISOString());
+ for(const width of [1440,390]){
+  await page.setViewportSize({width,height:844});await page.goto(origin,{waitUntil:'networkidle'});await page.getByRole('button',{name:'Сообщения',exact:true}).click();
+  await page.locator('.match-row').waitFor();await page.screenshot({path:`outputs/design-populated-messages-${width}.png`,fullPage:true});await page.locator('.match-row').click();await page.locator('.bubble').waitFor();
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  await page.screenshot({path:`outputs/design-chat-${width}.png`,fullPage:true});await page.keyboard.press('Escape');
  }
  assert.deepEqual(errors,[]);console.log('Design PASS: 4 widths × 6 screens, demo cards, no overflow or browser errors.');
 }finally{await browser.close();h.server.closeAllConnections();await new Promise(r=>h.server.close(r));await rm(dir,{recursive:true,force:true});}

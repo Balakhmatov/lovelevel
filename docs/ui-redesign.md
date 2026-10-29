@@ -6,9 +6,9 @@ profile visibility, progression, authenticated media and Telegram flows.
 
 ## Direction
 
-Warm off-white (#f5f5f1), graphite (#252b28), restrained forest green. Locally
+Warm off-white (#f7f5f2), warm near-black (#292329), muted aubergine (#59415d). Locally
 hosted Inter Variable includes Cyrillic; its OFL license is in assets/fonts.
-A dark level card gives progression visual weight without game ornaments.
+A charcoal-purple (#302632) level card gives progression visual weight without game ornaments.
 
 Desktop: 220px navigation, compact page heading, flexible content and 264px
 status rail. Mobile: five fixed navigation destinations, admin action in the
