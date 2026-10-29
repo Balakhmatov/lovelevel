@@ -33,7 +33,7 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
     if(!identity)response=new Response('{"error":"Войдите в аккаунт"}',{status:401,headers:{'Content-Type':'application/json'}});
     else{response=await app.fetch(request,env);if(response.ok){sqlite.prepare('DELETE FROM auth_accounts WHERE id=?').run(identity.id);response.headers.set('Set-Cookie',`${auth.cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureCookies?'; Secure':''}`);}}
    }else response=await app.fetch(request,env);
-   const responseHeaders=Object.fromEntries(response.headers);responseHeaders['X-Content-Type-Options']='nosniff';responseHeaders['Referrer-Policy']='same-origin';responseHeaders['X-Frame-Options']='DENY';
+   const responseHeaders=Object.fromEntries(response.headers);responseHeaders['X-Content-Type-Options']='nosniff';responseHeaders['Referrer-Policy']='same-origin';if(path.pathname!=='/miniapp')responseHeaders['X-Frame-Options']='DENY';
    if(secureCookies)responseHeaders['Strict-Transport-Security']='max-age=31536000';
    res.writeHead(response.status,responseHeaders);
    if(method==='HEAD'||!response.body)res.end();else await pipeline(Readable.fromWeb(response.body),res);

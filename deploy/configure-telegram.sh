@@ -3,7 +3,7 @@ set -Eeuo pipefail
 [[ $(id -u) == 0 ]] || { echo 'Run as root on the VPS'; exit 1; }
 NODE=/usr/local/bin/node-lovelevel
 [[ -x "$NODE" ]] || { echo 'Install LoveLevel first'; exit 1; }
-if ! curl --fail --silent http://127.0.0.1:3118/api/auth/config | "$NODE" -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{try{if(!JSON.parse(s).telegram)process.exit(1)}catch{process.exit(1)}})'; then
+if ! curl --fail --silent http://127.0.0.1:3118/api/auth/config | "$NODE" -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{try{if(!JSON.parse(s).telegram?.miniApp)process.exit(1)}catch{process.exit(1)}})'; then
  echo 'Telegram update is not deployed yet. Wait for auto-deploy, then repeat.'; exit 1
 fi
 install -d -o root -g root -m 0700 /etc/lovelevel
@@ -20,7 +20,8 @@ unset token
 import fs from 'node:fs';
 const text=fs.readFileSync(process.argv[2],'utf8');
 const token=text.split('\n').find(s=>s.startsWith('TELEGRAM_BOT_TOKEN=')).slice('TELEGRAM_BOT_TOKEN='.length);
-try{const response=await fetch('https://api.telegram.org/bot'+token+'/getMe',{signal:AbortSignal.timeout(15000)});const data=await response.json();if(!data.ok||String(data.result?.username).toLowerCase()!=='lovelevel_app_bot'){console.error('Token was not confirmed for @lovelevel_app_bot. Check BotFather.');process.exit(1);}}catch{console.error('Could not verify bot. Check token and VPS access to api.telegram.org.');process.exit(1);}
+try{const response=await fetch('https://api.telegram.org/bot'+token+'/getMe',{signal:AbortSignal.timeout(15000)});const data=await response.json();if(!data.ok||String(data.result?.username).toLowerCase()!=='lovelevel_app_bot'){console.error('Token was not confirmed for @lovelevel_app_bot. Check BotFather.');process.exit(1);}
+const menu=await fetch('https://api.telegram.org/bot'+token+'/setChatMenuButton',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({menu_button:{type:'web_app',text:'Открыть LoveLevel',web_app:{url:'https://lovelevel.cityai.site/miniapp'}}}),signal:AbortSignal.timeout(15000)});if(!(await menu.json()).ok){console.error('Could not configure the Mini App menu button.');process.exit(1);}}catch{console.error('Could not verify bot. Check token and VPS access to api.telegram.org.');process.exit(1);}
 JS
 mv "$pending" /etc/lovelevel/telegram.env
 chown root:root /etc/lovelevel/telegram.env
@@ -36,4 +37,5 @@ for attempt in {1..15}; do
 done
 [[ "$ready" == true ]] || { echo 'Telegram did not become ready. Inspect lovelevel service logs without printing secrets.'; exit 1; }
 echo 'Telegram login enabled for @lovelevel_app_bot. No token was printed.'
-echo 'Set /setdomain to lovelevel.cityai.site in BotFather, then link Telegram from your existing LoveLevel profile.'
+echo 'Mini App menu button is configured. Open @lovelevel_app_bot, press Start, then Open LoveLevel.'
+echo 'For an existing account: choose I already have an account, sign in by email, then link Telegram in the profile.'

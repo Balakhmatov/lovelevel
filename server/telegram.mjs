@@ -1,3 +1,4 @@
+import {verifyMiniApp} from './miniapp.mjs';
 import {createHash,createHmac,randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
 const digest=s=>createHash('sha256').update(s).digest('hex');
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}});
@@ -18,7 +19,7 @@ export function verifyTelegram(data,botToken,now=Date.now()){
  return {id,username:typeof data.username==='string'?data.username.slice(0,64):'',proof:hash,expires:(date+330)*1000};
 }
 
-export function createTelegramAuth(sqlite,{current,newSession,consume},{origin,secure,registration,inviteCode,botToken='',botUsername='lovelevel_app_bot',now=()=>Date.now()}={}){
+export function createTelegramAuth(sqlite,{current,newSession,issueSession,consume},{origin,secure,registration,inviteCode,botToken='',botUsername='lovelevel_app_bot',now=()=>Date.now()}={}){
  const username=String(botUsername).replace(/^@/,'');
  const enabled=/^[0-9]+:[A-Za-z0-9_-]{20,}$/.test(botToken)&&/^[A-Za-z0-9_]{5,32}$/.test(username);
  const challengeCookie=secure?'__Host-lovelevel_tg':'lovelevel_tg_local';
@@ -31,32 +32,39 @@ export function createTelegramAuth(sqlite,{current,newSession,consume},{origin,s
   if(!enabled)return json({error:'Вход через Telegram ещё не настроен'},503);
   if(request.method!=='POST')return json({error:'Метод недоступен'},405);
   if(request.headers.get('origin')!==origin)return json({error:'Недопустимый источник запроса'},403);
-  if(!consume('telegram-ip:'+ip,30,15*60*1000))return json({error:'Слишком много попыток. Попробуйте позже.'},429);
+  if(!consume('telegram-ip:'+ip,90,15*60*1000))return json({error:'Слишком много попыток. Попробуйте позже.'},429);
   let b;try{b=await request.json();}catch{return json({error:'Некорректный запрос'},400);}
   if(!b||typeof b!=='object')return json({error:'Некорректный запрос'},400);
   sqlite.prepare('DELETE FROM auth_telegram_challenges WHERE expires<=?').run(now());
   sqlite.prepare('DELETE FROM auth_telegram_proofs WHERE expires<=?').run(now());
+  const miniapp=path.includes('/miniapp-')||(path==='/api/auth/telegram/challenge'&&b.transport==='miniapp');
+  const miniProof=miniapp?verifyMiniApp(b.initData,botToken,now()):null;
+  if(miniapp&&!miniProof)return json({error:'Не удалось подтвердить Telegram. Закройте и заново откройте мини-приложение.'},401);
+  if(path==='/api/auth/telegram/miniapp-info'){
+   const linked=sqlite.prepare('SELECT account FROM auth_telegram_links WHERE telegram_id=?').get(miniProof.id);
+   return json({linked:!!linked,currentMatches:!!account&&linked?.account===account.id});
+  }
   if(path==='/api/auth/telegram/challenge'){
    if(!['login','link'].includes(b.mode))return json({error:'Неверное действие'},400);
    if(b.mode==='link'&&!account)return json({error:'Сначала войдите в свой аккаунт'},401);
    if(b.mode==='login'&&account)return json({error:'Вы уже вошли. Привяжите Telegram в профиле.'},409);
    const token=randomBytes(32).toString('hex');
-   sqlite.prepare('INSERT INTO auth_telegram_challenges(token_hash,account,mode,expires) VALUES(?,?,?,?)').run(digest(token),account?.id||null,b.mode,now()+600000);
+   sqlite.prepare('INSERT INTO auth_telegram_challenges(token_hash,account,mode,expires) VALUES(?,?,?,?)').run(digest(token),account?.id||null,miniapp?'miniapp:'+b.mode:b.mode,now()+600000);
    return json({challenge:token,botUsername:username},200,{'Set-Cookie':cookie(token)});
   }
-  const mode=path==='/api/auth/telegram/login'?'login':path==='/api/auth/telegram/link'?'link':null;
+  const mode=['/api/auth/telegram/login','/api/auth/telegram/miniapp-login'].includes(path)?'login':['/api/auth/telegram/link','/api/auth/telegram/miniapp-link'].includes(path)?'link':null;
   if(!mode)return json({error:'Не найдено'},404);
   if(mode==='link'&&!account)return json({error:'Сначала войдите в свой аккаунт'},401);
   if(mode==='login'&&account)return json({error:'Вы уже вошли. Привяжите Telegram в профиле.'},409);
-  const token=browserToken(request);
-  if(typeof b.challenge!=='string'||!/^([a-f0-9]{64})$/.test(token)||!timingSafeEqual(Buffer.from(digest(token)),Buffer.from(digest(b.challenge))))return json({error:'Начните вход через Telegram заново'},403);
-  const proof=verifyTelegram(b.telegram,botToken,now());if(!proof)return json({error:'Telegram не подтвердил вход. Попробуйте ещё раз.'},401);
+  const token=miniapp?b.challenge:browserToken(request);
+  if(typeof b.challenge!=='string'||typeof token!=='string'||!/^([a-f0-9]{64})$/.test(token)||!timingSafeEqual(Buffer.from(digest(token)),Buffer.from(digest(b.challenge))))return json({error:'Начните вход через Telegram заново'},403);
+  const proof=miniapp?miniProof:verifyTelegram(b.telegram,botToken,now());if(!proof)return json({error:'Telegram не подтвердил вход. Попробуйте ещё раз.'},401);
   let target;
   sqlite.exec('BEGIN IMMEDIATE');
   try{
-   const challenge=sqlite.prepare('SELECT * FROM auth_telegram_challenges WHERE token_hash=? AND mode=? AND expires>?').get(digest(token),mode,now());
+   const challenge=sqlite.prepare('SELECT * FROM auth_telegram_challenges WHERE token_hash=? AND mode=? AND expires>?').get(digest(token),miniapp?'miniapp:'+mode:mode,now());
    if(!challenge||challenge.account!==(account?.id||null))throw Object.assign(new Error('Начните вход через Telegram заново'),{status:403});
-   if(sqlite.prepare('SELECT 1 FROM auth_telegram_proofs WHERE hash=?').get(proof.proof))throw Object.assign(new Error('Это подтверждение уже использовано. Повторите вход через Telegram.'),{status:409});
+   if(!miniapp&&sqlite.prepare('SELECT 1 FROM auth_telegram_proofs WHERE hash=?').get(proof.proof))throw Object.assign(new Error('Это подтверждение уже использовано. Повторите вход через Telegram.'),{status:409});
    const linked=sqlite.prepare('SELECT account FROM auth_telegram_links WHERE telegram_id=?').get(proof.id);
    if(mode==='link'){
     if(linked&&linked.account!==account.id)throw Object.assign(new Error('Этот Telegram уже привязан к другому аккаунту LoveLevel.'),{status:409});
@@ -75,10 +83,11 @@ export function createTelegramAuth(sqlite,{current,newSession,consume},{origin,s
    }
    if(!linked)sqlite.prepare('INSERT INTO auth_telegram_links(telegram_id,account,username,created) VALUES(?,?,?,?)').run(proof.id,target,proof.username,now());
    else sqlite.prepare('UPDATE auth_telegram_links SET username=? WHERE telegram_id=?').run(proof.username,proof.id);
-   sqlite.prepare('INSERT INTO auth_telegram_proofs(hash,expires) VALUES(?,?)').run(proof.proof,proof.expires);
+   if(!miniapp)sqlite.prepare('INSERT INTO auth_telegram_proofs(hash,expires) VALUES(?,?)').run(proof.proof,proof.expires);
    sqlite.prepare('DELETE FROM auth_telegram_challenges WHERE token_hash=?').run(digest(token));
    sqlite.exec('COMMIT');
   }catch(error){sqlite.exec('ROLLBACK');if(error.status)return json({error:error.message},error.status);throw error;}
+  if(mode==='login'&&miniapp){const session=issueSession(target);return json({ok:true,sessionToken:session.token},200,{'Set-Cookie':session.cookie});}
   return mode==='login'?json({ok:true},200,{'Set-Cookie':newSession(target)}):json({ok:true,linked:true});
  }
  return {enabled,username,route,status};
