@@ -1,3 +1,4 @@
+import {isMain} from './entrypoint.mjs';
 import {resolve,dirname,sep} from 'node:path';
 import {readFile,realpath,stat} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
@@ -20,6 +21,6 @@ export async function importSnapshot({sqlite,bucket,snapshot,filesDirectory,dryR
  finally{if(!committed)for(const key of copied)await bucket.delete(key);}
  return Object.fromEntries(tables.map(t=>[t,snapshot.tables[t].length]));
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+if(isMain(import.meta.url)){
  const args=process.argv.slice(2),arg=k=>{const i=args.indexOf(k);return i<0?null:args[i+1];};const source=arg('--snapshot');if(!source)throw new Error('Usage: import.mjs --snapshot FILE --files DIRECTORY [--dry-run]. Stop LoveLevel before import.');const dir=process.env.DATA_DIR||'/var/lib/lovelevel';const {sqlite}=openDatabase(resolve(dir,'lovelevel.sqlite'),resolve(dirname(fileURLToPath(import.meta.url)),'../drizzle'));try{const result=await importSnapshot({sqlite,bucket:diskBucket(resolve(dir,'uploads')),snapshot:JSON.parse(await readFile(source,'utf8')),filesDirectory:arg('--files'),dryRun:args.includes('--dry-run')});console.log(JSON.stringify({ok:true,counts:result,dryRun:args.includes('--dry-run')}));}finally{sqlite.close();}
 }

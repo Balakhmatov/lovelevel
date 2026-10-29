@@ -1,3 +1,4 @@
+import {isMain} from './entrypoint.mjs';
 import http from 'node:http';
 import {resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -42,7 +43,7 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
  return {server,sqlite,env,auth,host};
 }
 
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+if(isMain(import.meta.url)){
  const origin=process.env.PUBLIC_ORIGIN;if(!origin)throw new Error('Set PUBLIC_ORIGIN');
  const production=process.env.NODE_ENV==='production';if(production&&!origin.startsWith('https://'))throw new Error('Production requires HTTPS');
  const {server}=createServer({origin,dataDir:process.env.DATA_DIR||resolve('data'),secureCookies:production||!['127.0.0.1','localhost'].includes(new URL(origin).hostname),registration:process.env.ALLOW_REGISTRATION==='true',inviteCode:process.env.INVITE_CODE||'',adminIds:process.env.ADMIN_USER_IDS||''});

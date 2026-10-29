@@ -1,3 +1,4 @@
+import {isMain} from './entrypoint.mjs';
 import {resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomUUID} from 'node:crypto';
@@ -13,7 +14,7 @@ export async function createAccount(sqlite,{email,password,profileId}){
  email=String(email||'').trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)throw new Error('Invalid email');if(typeof password!=='string'||password.length<10||password.length>128)throw new Error('Password must have 10–128 characters');
  const id=profileId||randomUUID();if(profileId&&!sqlite.prepare('SELECT 1 FROM profiles WHERE id=?').get(id))throw new Error('Imported profile not found');if(sqlite.prepare('SELECT 1 FROM auth_accounts WHERE id=? OR email=?').get(id,email))throw new Error('Account already exists; do not overwrite it');const hash=await hashPassword(password);sqlite.prepare('INSERT INTO auth_accounts(id,email,password_hash,created) VALUES(?,?,?,?)').run(id,email,hash,Date.now());return id;
 }
-const direct=process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url);
+const direct=isMain(import.meta.url);
 if(direct){
  const [command,...args]=process.argv.slice(2),arg=k=>{const i=args.indexOf(k);return i<0?null:args[i+1];};
  const {sqlite}=openDatabase(resolve(process.env.DATA_DIR||'/var/lib/lovelevel','lovelevel.sqlite'),resolve(dirname(fileURLToPath(import.meta.url)),'../drizzle'));
