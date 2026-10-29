@@ -8,11 +8,11 @@ import {openDatabase,diskBucket} from './storage.mjs';
 import {createAuth} from './auth.mjs';
 import app from '../dist/server/index.js';
 
-export function createServer({origin,dataDir,secureCookies=true,registration=false,inviteCode='',adminIds='',host='127.0.0.1'}={}){
+export function createServer({origin,dataDir,secureCookies=true,registration=false,inviteCode='',adminIds='',telegramBotToken='',telegramBotUsername='lovelevel_app_bot',host='127.0.0.1'}={}){
  const url=new URL(origin);if(url.origin!==origin||!['https:','http:'].includes(url.protocol))throw new Error('PUBLIC_ORIGIN must be an exact http(s) origin');
  if(!secureCookies&&!['127.0.0.1','localhost'].includes(url.hostname))throw new Error('Insecure cookies are permitted only on loopback');
  const {sqlite,DB}=openDatabase(resolve(dataDir,'lovelevel.sqlite'),resolve(dirname(fileURLToPath(import.meta.url)),'../drizzle'));
- const auth=createAuth(sqlite,{origin,secure:secureCookies,registration,inviteCode});
+ const auth=createAuth(sqlite,{origin,secure:secureCookies,registration,inviteCode,telegramBotToken,telegramBotUsername});
  const env={DB,BUCKET:diskBucket(resolve(dataDir,'uploads')),ADMIN_USER_IDS:adminIds};
  const server=http.createServer({requestTimeout:30000,headersTimeout:10000,maxHeaderSize:16*1024},async(req,res)=>{
   try{
@@ -46,7 +46,7 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
 if(isMain(import.meta.url)){
  const origin=process.env.PUBLIC_ORIGIN;if(!origin)throw new Error('Set PUBLIC_ORIGIN');
  const production=process.env.NODE_ENV==='production';if(production&&!origin.startsWith('https://'))throw new Error('Production requires HTTPS');
- const {server}=createServer({origin,dataDir:process.env.DATA_DIR||resolve('data'),secureCookies:production||!['127.0.0.1','localhost'].includes(new URL(origin).hostname),registration:process.env.ALLOW_REGISTRATION==='true',inviteCode:process.env.INVITE_CODE||'',adminIds:process.env.ADMIN_USER_IDS||''});
+ const {server}=createServer({origin,dataDir:process.env.DATA_DIR||resolve('data'),secureCookies:production||!['127.0.0.1','localhost'].includes(new URL(origin).hostname),registration:process.env.ALLOW_REGISTRATION==='true',inviteCode:process.env.INVITE_CODE||'',adminIds:process.env.ADMIN_USER_IDS||'',telegramBotToken:process.env.TELEGRAM_BOT_TOKEN||'',telegramBotUsername:process.env.TELEGRAM_BOT_USERNAME||'lovelevel_app_bot'});
  const port=Number(process.env.PORT||3118);if(!Number.isInteger(port)||port<1024||port>65535)throw new Error('Invalid PORT');
  server.listen(port,'127.0.0.1',()=>console.log(`LoveLevel listening on 127.0.0.1:${port}`));
  let stopping=false;const stop=()=>{if(stopping)return;stopping=true;server.close(()=>process.exit(0));server.closeIdleConnections();setTimeout(()=>process.exit(1),10000).unref();};process.on('SIGTERM',stop);process.on('SIGINT',stop);

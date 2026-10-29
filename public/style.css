@@ -7,3 +7,5 @@
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 .profile-cover{position:relative}.portrait img.demo-image,.profile-cover img.demo-image,.gallery-item img.demo-image{position:absolute;width:300%;height:200%;max-width:none;left:calc(-100% * var(--col));top:calc(-100% * var(--row));object-fit:fill}.person:hover .portrait img.demo-image{transform:none}
+
+.telegram-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 18px;border:0;border-radius:11px;background:#2aabee;color:white;font-size:12px;font-weight:700}.telegram-button:hover{background:#2196d4}.telegram-button.wide{width:100%}.auth-divider{display:flex;align-items:center;gap:12px;margin:20px 0;color:var(--muted);font-size:10px}.auth-divider:before,.auth-divider:after{content:"";height:1px;flex:1;background:var(--line)}#telegram-widget{min-height:0}#telegram-widget iframe{max-width:100%;border:0}

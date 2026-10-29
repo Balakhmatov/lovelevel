@@ -15,6 +15,13 @@
       "when": 1793284938139,
       "tag": "0001_aberrant_thing",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793298200539,
+      "tag": "0002_giant_strong_guy",
+      "breakpoints": true
     }
   ]
 }

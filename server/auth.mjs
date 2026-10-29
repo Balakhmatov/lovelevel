@@ -1,3 +1,4 @@
+import {createTelegramAuth} from './telegram.mjs';
 import {randomBytes,randomUUID,createHash,scrypt as rawScrypt,timingSafeEqual} from 'node:crypto';
 import {promisify} from 'node:util';
 const scrypt=promisify(rawScrypt);
@@ -10,18 +11,20 @@ const options={N:32768,r:8,p:1,maxmem:64*1024*1024};
 export async function hashPassword(password){const salt=randomBytes(16).toString('hex');const hash=await scrypt(password,salt,32,options);return 'scrypt$'+salt+'$'+hash.toString('hex');}
 export async function verifyPassword(password,encoded){if(typeof password!=='string'||password.length>128)return false;const [type,salt,hex]=encoded.split('$');if(type!=='scrypt'||!/^[a-f0-9]{64}$/.test(hex||''))return false;const expected=Buffer.from(hex,'hex'),actual=await scrypt(password,salt,32,options);return timingSafeEqual(expected,actual);}
 
-export function createAuth(sqlite,{origin,secure=true,registration=true,inviteCode='',now=()=>Date.now()}={}) {
+export function createAuth(sqlite,{origin,secure=true,registration=true,inviteCode='',telegramBotToken='',telegramBotUsername='lovelevel_app_bot',now=()=>Date.now()}={}) {
  const cookieName=secure?'__Host-lovelevel':'lovelevel_local';
  const sessionAge=30*24*60*60*1000;
  let activeHashes=0;
  const dummy='scrypt$00000000000000000000000000000000$'+'00'.repeat(32);
  function cookie(token='',age=30*24*60*60){return `${cookieName}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${secure?'; Secure':''}`;}
- function current(request){const raw=(request.headers.get('cookie')||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(cookieName+'='))?.slice(cookieName.length+1);if(!raw||!/^[a-f0-9]{64}$/.test(raw))return null;const row=sqlite.prepare('SELECT a.id,a.email FROM auth_sessions s JOIN auth_accounts a ON a.id=s.account WHERE s.token_hash=? AND s.expires>?').get(digest(raw),now());return row||null;}
+ function current(request){const raw=(request.headers.get('cookie')||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(cookieName+'='))?.slice(cookieName.length+1);if(!raw||!/^[a-f0-9]{64}$/.test(raw))return null;const row=sqlite.prepare("SELECT a.id,a.email,(a.password_hash LIKE 'scrypt$%') AS password_available FROM auth_sessions s JOIN auth_accounts a ON a.id=s.account WHERE s.token_hash=? AND s.expires>?").get(digest(raw),now());return row||null;}
  function consume(key,limit,windowMs){const bucket=Math.floor(now()/windowMs);sqlite.prepare('DELETE FROM auth_limits WHERE expires<?').run(now());sqlite.prepare('INSERT INTO auth_limits(key,bucket,count,expires) VALUES(?,?,1,?) ON CONFLICT(key,bucket) DO UPDATE SET count=count+1').run(digest(key),bucket,now()+windowMs*2);return sqlite.prepare('SELECT count FROM auth_limits WHERE key=? AND bucket=?').get(digest(key),bucket).count<=limit;}
  function newSession(account){sqlite.prepare('DELETE FROM auth_sessions WHERE expires<=?').run(now());const token=randomBytes(32).toString('hex');sqlite.prepare('INSERT INTO auth_sessions(token_hash,account,expires,created) VALUES(?,?,?,?)').run(digest(token),account,now()+sessionAge,now());return cookie(token);}
+ const telegram=createTelegramAuth(sqlite,{current,newSession,consume},{origin,secure,registration,inviteCode,botToken:telegramBotToken,botUsername:telegramBotUsername,now});
  async function route(request,ip){const url=new URL(request.url),path=url.pathname;
-  if(path==='/api/auth/config'&&request.method==='GET')return json({registration,inviteRequired:!!inviteCode,provider:'password'});
-  if(path==='/api/auth/session'&&request.method==='GET'){const account=current(request);return json({signedIn:!!account,email:account?.email||null});}
+  if(path==='/api/auth/config'&&request.method==='GET')return json({registration,inviteRequired:!!inviteCode,provider:'password',telegram:{enabled:telegram.enabled,botUsername:telegram.username}});
+  if(path==='/api/auth/session'&&request.method==='GET'){const account=current(request);return json({signedIn:!!account,email:account&&validEmail(account.email)?account.email:null,passwordAvailable:!!account&&validEmail(account.email)&&!!account.password_available,telegram:telegram.status(account)});}
+  if(path.startsWith('/api/auth/telegram/'))return telegram.route(request,ip);
   if(!['/api/auth/register','/api/auth/login','/api/auth/logout','/api/auth/password'].includes(path))return json({error:'Не найдено'},404);
   if(request.method!=='POST')return json({error:'Метод недоступен'},405);
   if(request.headers.get('origin')!==origin)return json({error:'Недопустимый источник запроса'},403);
