@@ -146,3 +146,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
  .level-journey{margin:23px 0 18px}.journey-track:before,.journey-track:after{top:35px}.journey-step{gap:10px}.journey-index{font-size:10px;line-height:14px}.journey-marker{width:16px;height:16px;margin-top:3px}.journey-marker svg{width:10px;height:10px}.journey-step.is-current .journey-marker{width:32px;height:32px;margin-top:-5px;font-size:13px}.journey-caption{margin:17px 0 18px;gap:4px}.journey-caption strong{font-size:12px}.journey-caption>span{font-size:11px}.journey-next{gap:10px;padding:12px;font-size:11px}.journey-next small{font-size:10px}.journey-next>.ico{width:25px;height:25px}
 }
 @media(max-width:370px){.journey-index{font-size:9px}.journey-marker{width:13px;height:13px;margin-top:5px}.journey-step.is-current .journey-marker{width:28px;height:28px;margin-top:-3px;font-size:12px}.journey-marker svg{width:8px;height:8px}}
+
+.task-context{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px 18px;margin-bottom:16px;border:1px solid var(--line);border-radius:10px;background:var(--accent-soft)}
+.task-context strong{font-size:13px;font-weight:600}.task-context p{font-size:12px;line-height:1.7;color:var(--muted);margin-top:4px}.task-context .secondary{flex:none;min-height:44px}
+@media(max-width:700px){.task-context{padding:13px;gap:10px}.task-context strong{font-size:12px}.task-context p{font-size:11px}.task-context .secondary{font-size:10px;padding:10px}}
