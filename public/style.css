@@ -107,3 +107,18 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .level-panel .progress-copy,.level-panel .level-next{color:var(--level-muted)}
 .level-panel .level-card-scale{color:#b9a7bd}
 .level-panel .level-card-action{color:#f3eaf5}
+
+/* Short, factual explanation of the currently available level benefits. */
+.level-help .level-help-intro{font-size:14px;line-height:1.7;color:var(--ink);margin-bottom:18px}
+.level-help-ranges{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px}
+.level-help-ranges>div{display:grid;grid-template-columns:72px 1fr;gap:18px;padding:15px 17px;align-items:center}
+.level-help-ranges>div+div{border-top:1px solid var(--line)}
+.level-help-ranges strong{font-size:24px;font-weight:550;letter-spacing:-.6px;color:var(--accent);font-variant-numeric:tabular-nums}
+.level-help-ranges strong span{display:block;font-size:10px;font-weight:450;letter-spacing:0;margin-top:3px;color:var(--muted)}
+.level-help-ranges p{margin:0;font-size:13px;line-height:1.65;color:var(--ink)}
+.level-help .level-help-example{font-size:12px;line-height:1.7;margin-bottom:18px}
+.level-help-progress{padding-top:16px;border-top:1px solid var(--line)}
+.level-help-progress h3{font-size:14px;font-weight:600;margin-bottom:7px}
+.level-help-progress p,.level-help .level-help-note{font-size:12px;line-height:1.7;margin-bottom:15px}
+.level-help-free{font-size:11px;line-height:1.6;color:var(--accent);background:var(--accent-soft);padding:10px 12px;border-radius:7px;margin-bottom:18px}
+@media(max-width:700px){.level-help .level-help-intro{font-size:13px;margin-bottom:15px}.level-help-ranges>div{grid-template-columns:58px 1fr;gap:13px;padding:13px}.level-help-ranges strong{font-size:22px}.level-help-ranges p{font-size:12px}.level-help .level-help-example,.level-help-progress p,.level-help .level-help-note{font-size:12px}}
