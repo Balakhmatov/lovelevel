@@ -1,0 +1,1 @@
+ALTER TABLE `progression_state` ADD `rail_hidden` integer DEFAULT 0 NOT NULL;

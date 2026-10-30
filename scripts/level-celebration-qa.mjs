@@ -24,5 +24,12 @@ try{
  await page.waitForTimeout(900);assert.equal(await page.locator('.level-celebration').count(),0);
  await page.reload({waitUntil:'networkidle'});await page.waitForTimeout(900);assert.equal(await page.locator('.level-celebration').count(),0);
  for(const width of [320,390,768,1440]){await page.setViewportSize({width,height:900});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()),'#fff9f6');assert.equal(await page.locator('.level-panel').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(255, 229, 239)');}
- assert.deepEqual(errors,[]);console.log('Light palette and automatic level celebration PASS: no repeated popup after reload; four viewport widths.');
+ await page.getByRole('button',{name:'Скрыть панель уровней',exact:true}).click();
+ await page.waitForTimeout(200);assert.equal(await page.locator('.rail').count(),0);
+ await page.reload({waitUntil:'networkidle'});assert.equal(await page.locator('.rail').count(),0);
+ await page.getByRole('button',{name:'Мой уровень',exact:true}).click();await page.getByRole('button',{name:'Показывать панель уровней',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Показывать панель уровней',exact:true}).click();await page.waitForTimeout(200);
+ await page.getByRole('button',{name:'Знакомства',exact:true}).click();assert.equal(await page.locator('.rail').count(),1);
+ const other=await browser.newPage();await other.goto(origin);assert.equal(await other.locator('.rail').count(),1);await other.close();
+ assert.deepEqual(errors,[]);console.log('Levels and panel PASS: congratulations, persistent dismissal, restore and separate guest state.');
 }finally{await browser.close();await new Promise(resolve=>h.server.close(resolve));await rm(dir,{recursive:true,force:true});}

@@ -17,7 +17,7 @@ async function progression(env,id,profile,visit=false){
  const days=(await one(env,'SELECT COUNT(*) AS n FROM visit_days WHERE user=?',id)).n;
  const likes=(await one(env,'SELECT COUNT(*) AS n FROM likes WHERE sender=?',id)).n;
  const tasks=milestoneTasks(profile,{photos:media.filter(m=>mediaKind(m)==='photo').length,likes,days,privacy:saved.photo_access||media.some(m=>mediaKind(m)==='photo'&&!m.basic&&m.min>1),videos:media.filter(m=>mediaKind(m)==='video').length,voices:media.filter(m=>mediaKind(m)==='voice').length});
- return {level:saved.max_level,days,tasks:tasks.map(t=>({...t,claimed:t.targetLevel<=saved.max_level,canClaim:t.ready&&t.targetLevel===saved.max_level+1}))};
+ return {railHidden:!!saved.rail_hidden,level:saved.max_level,days,tasks:tasks.map(t=>({...t,claimed:t.targetLevel<=saved.max_level,canClaim:t.ready&&t.targetLevel===saved.max_level+1}))};
 }
 async function blocked(env,a,b){return !!await one(env,'SELECT 1 FROM blocks WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)',a,b,b,a);}
 async function matched(env,a,b){return !!await one(env,'SELECT 1 FROM likes a JOIN likes b ON a.sender=b.recipient AND a.recipient=b.sender WHERE a.sender=? AND a.recipient=?',a,b);}
@@ -36,8 +36,9 @@ async function api(request,env){
  const profile=await one(env,'SELECT * FROM profiles WHERE id=?',id);
  if(path==='/api/me'&&method==='GET'){
   const progress=await progression(env,id,profile,true);
-  return J({id,admin:isAdmin(request,env,id),profile:profile?await publicProfile(env,profile,id,progress.level):null,level:progress.level,days:progress.days,tasks:progress.tasks,rulesVersion:'2026-10-milestones',mediaLimits:{photo:12,video:2,voice:2,videoSeconds:30,voiceSeconds:30,maxBytes:5*1024*1024,maxClipSourceBytes:50*1024*1024,maxVideoBytes:3*1024*1024,maxVoiceBytes:192*1024}});
+  return J({id,railHidden:progress.railHidden,admin:isAdmin(request,env,id),profile:profile?await publicProfile(env,profile,id,progress.level):null,level:progress.level,days:progress.days,tasks:progress.tasks,rulesVersion:'2026-10-milestones',mediaLimits:{photo:12,video:2,voice:2,videoSeconds:30,voiceSeconds:30,maxBytes:5*1024*1024,maxClipSourceBytes:50*1024*1024,maxVideoBytes:3*1024*1024,maxVoiceBytes:192*1024}});
  }
+ if(path==='/api/preferences'&&method==='PATCH'){const b=await request.json();if(typeof b.railHidden!=='boolean')err('Неверная настройка');await progression(env,id,profile);await run(env,'UPDATE progression_state SET rail_hidden=? WHERE user=?',b.railHidden?1:0,id);return J({ok:true});}
  if(path==='/api/birthdate'&&method==='GET')return J({birthdate:profile?.birthdate||null});
  if(path==='/api/profile'&&method==='POST'){
   const b=await request.json();const name=clean(b.name,40),city=clean(b.city,60),bio=clean(b.bio,700),intent=clean(b.intent,80);const a=age(b.birthdate||'');
