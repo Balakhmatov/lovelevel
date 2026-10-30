@@ -7,6 +7,7 @@ import {pipeline} from 'node:stream/promises';
 import {openDatabase,diskBucket} from './storage.mjs';
 import {createAuth} from './auth.mjs';
 import {botMenu} from './bot-menu.mjs';
+import {inspectClip} from './media-probe.mjs';
 import app from '../dist/server/index.js';
 
 export function createServer({origin,dataDir,secureCookies=true,registration=false,inviteCode='',adminIds='',telegramBotToken='',telegramBotUsername='lovelevel_app_bot',host='127.0.0.1'}={}){
@@ -27,6 +28,10 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
    const method=req.method;let request=new Request(path,{method,headers,body:['GET','HEAD'].includes(method)?undefined:Buffer.concat(chunks)});
    const identity=auth.current(request);
    if(identity)headers.set('x-lovelevel-user-id',identity.id);
+   if(path.pathname==='/api/upload'&&method==='POST'&&identity&&headers.get('origin')===origin){
+    const form=await request.clone().formData(),file=form.get('file');
+    if(file instanceof File&&!file.type.startsWith('image/')){try{const info=await inspectClip(file);headers.set('x-lovelevel-media-duration',String(info.duration));}catch(error){res.writeHead(error.status||400,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:error.message}));return;}}
+   }
    request=new Request(path,{method,headers,body:['GET','HEAD'].includes(method)?undefined:Buffer.concat(chunks)});
    let response;
    if(path.pathname==='/api/telegram/webhook')response=await botMenu(request,{token:telegramBotToken,origin});

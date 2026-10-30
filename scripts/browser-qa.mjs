@@ -19,7 +19,7 @@ await page.locator('#profile-form').waitFor();await page.locator('#name').fill('
 await page.locator('[data-interest="Кофе"]').click();await page.locator('[data-interest="Книги"]').click();await page.locator('[data-interest="Кино"]').click();await page.locator('#profile-form input[name=adult]').check();await page.locator('#profile-form input[name=terms]').check();await page.locator('#profile-form button[type=submit]').click();
 await page.getByRole('heading',{name:'Моя галерея'}).waitFor();
 await page.locator('#upload-form input[type=file]').setInputFiles('assets/demo-portraits.jpg');await page.locator('#upload-form button').click();await page.locator('.gallery-item .label').filter({hasText:'На проверке'}).waitFor();
-await page.getByRole('button',{name:'Мой уровень',exact:true}).click();await page.locator('[data-action=claim][data-key=profile]').click();await page.getByRole('dialog').waitFor();await page.locator('[data-action=close]').click();
+await page.getByRole('button',{name:'Мой уровень',exact:true}).click();await page.locator('[data-action=claim][data-key=basics]').click();await page.getByRole('dialog').waitFor();await page.locator('[data-action=close]').click();
 assert.match(await page.locator('.level-number > strong').first().textContent(),/02/);
 await page.getByRole('button',{name:'Выйти',exact:true}).click();await page.getByRole('button',{name:'Войти',exact:true}).waitFor();
 await page.getByRole('button',{name:'Войти',exact:true}).click();await page.locator('#auth-email').fill(email);await page.locator('#auth-password').fill(password);await page.locator('#auth-form button[type=submit]').click();

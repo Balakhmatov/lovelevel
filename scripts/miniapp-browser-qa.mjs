@@ -2,7 +2,7 @@
 // are stripped to exercise Telegram Web/third-party-cookie-restricted clients.
 import {chromium} from '/opt/codex/cua_node/lib/node_modules/playwright/index.mjs';
 import {createHmac} from 'node:crypto';
-import {mkdtemp,rm,readFile,mkdir} from 'node:fs/promises';
+import {mkdtemp,rm,readFile,writeFile,mkdir} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import net from 'node:net';
@@ -22,7 +22,7 @@ h.sqlite.prepare('INSERT INTO media VALUES(?,?,?,?,?,?,?,?)').run('test-photo','
 h.server.listen(port,'127.0.0.1');await once(h.server,'listening');
 const browser=await chromium.launch({executablePath:'/usr/bin/chromium',headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});let page;
 async function miniPage(id){const page=await browser.newPage({viewport:{width:390,height:844}});const values={auth_date:String(Math.floor(Date.now()/1000)),query_id:'browser-'+id,user:JSON.stringify({id,first_name:'Тест',username:'mini_browser'})};values.hash=createHmac('sha256',createHmac('sha256','WebAppData').update(token).digest()).update(Object.keys(values).sort().map(k=>k+'='+values[k]).join('\n')).digest('hex');const raw=new URLSearchParams(values).toString();
- await page.route(origin+'/**',async route=>{const headers={...route.request().headers()};headers.cookie='blocked_cookie_fixture=1';const response=await route.fetch({headers});const responseHeaders={...response.headers()};delete responseHeaders['set-cookie'];await route.fulfill({response,headers:responseHeaders});});
+ await page.route(new RegExp('^'+origin.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'/(?!api/upload(?:[?]|$))'),async route=>{const headers={...route.request().headers()};headers.cookie='blocked_cookie_fixture=1';const response=await route.fetch({headers});const responseHeaders={...response.headers()};delete responseHeaders['set-cookie'];await route.fulfill({response,headers:responseHeaders});});
  await page.route('https://telegram.org/js/telegram-web-app.js*',route=>route.fulfill({contentType:'application/javascript',body:`window.Telegram={WebApp:{initData:${JSON.stringify(raw)},ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){},safeAreaInset:{bottom:12},onEvent(){},BackButton:{onClick(){},show(){},hide(){}}}};`}));return page;}
 try{
  page=await miniPage(800001);const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(origin+'/miniapp',{waitUntil:'networkidle'});await page.getByRole('heading',{name:'LoveLevel в Telegram',exact:true}).waitFor();assert.equal(h.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_accounts').get().n,1);
@@ -33,15 +33,29 @@ try{
  await mkdir('outputs',{recursive:true});await page.screenshot({path:'outputs/miniapp-mobile.png',fullPage:true});assert.deepEqual(errors,[]);
  // Exercise both ends of the journey and Telegram safe-area layout with cookies blocked.
  for(const [points,expectedLevel] of [[0,1],[20,5],[100,10]]){
-  h.sqlite.prepare('UPDATE rewards SET points=? WHERE user=? AND key=?').run(points,'owner-fixture','profile');
-  await page.setViewportSize({width:expectedLevel===1?320:390,height:844});await page.reload({waitUntil:'networkidle'});await page.getByRole('button',{name:'Выйти',exact:true}).waitFor();await page.getByRole('button',{name:'Мой уровень',exact:true}).click();
+  h.sqlite.prepare('UPDATE progression_state SET max_level=? WHERE user=?').run(expectedLevel,'owner-fixture');
+  await page.setViewportSize({width:expectedLevel===1?320:390,height:844});await page.reload({waitUntil:'networkidle'});await page.getByRole('button',{name:'Выйти',exact:true}).waitFor();await page.getByRole('button',{name:'Мой уровень',exact:true}).click();await page.locator('.journey-step').first().waitFor();
   assert.equal(await page.locator('.journey-step').count(),10);assert.equal(await page.locator('.journey-step[aria-current=step]').count(),1);assert.equal(await page.locator('.journey-step.is-complete').count(),expectedLevel-1);assert.match(await page.locator('.journey-caption strong').textContent(),new RegExp('Уровень '+expectedLevel+'$'));
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('tg-miniapp')),true);
   await page.locator('.level-journey').scrollIntoViewIfNeeded();await page.screenshot({path:`outputs/miniapp-journey-${expectedLevel}.png`,fullPage:true});
  }
+
+ await page.context().clearCookies();assert.equal((await page.context().cookies()).length,0);
+ // Protected video/audio also work in Telegram when third-party cookies are blocked.
+ const clips=JSON.parse(await readFile('tests/fixtures/media.json','utf8'));
+ await page.getByRole('button',{name:'Мой профиль',exact:true}).click();
+ for(const [key,name,selector,form] of [['video','short.mp4','#video-file','#video-upload-form'],['voice','voice.webm','#voice-file','#voice-upload-form']]){
+  const file=join(dir,name);await writeFile(file,Buffer.from(clips[key],'base64'));await page.locator(selector).setInputFiles(file);await page.locator(form+' button[type=submit]').click();
+  await page.waitForFunction(kind=>[...document.querySelectorAll('.gallery-item '+(kind==='video'?'video':'audio'))].some(el=>el.src.startsWith('blob:')&&el.readyState>=1),key);const player=page.locator('.gallery-item '+(key==='video'?'video':'audio')).first();await player.evaluate(async el=>{el.muted=true;await el.play();});await page.waitForFunction(kind=>[...document.querySelectorAll('.gallery-item '+(kind==='video'?'video':'audio'))].some(el=>el.currentTime>0.02),key);await player.evaluate(el=>el.pause());
+ }
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.locator('.gallery-section').scrollIntoViewIfNeeded();await page.screenshot({path:'outputs/miniapp-media-mobile.png',fullPage:true});
+ await page.getByRole('button',{name:'Модерация',exact:true}).click();await page.locator('#admin-content video').waitFor();await page.locator('#admin-content audio').waitFor();
+ await page.waitForFunction(()=>[...document.querySelectorAll('#admin-content video,#admin-content audio')].every(el=>el.src.startsWith('blob:')&&el.readyState>=1));
+ for(let remaining=2;remaining>0;remaining--){await page.locator('[data-action=review][data-status=approved]').first().click();await page.waitForFunction(n=>document.querySelectorAll('[data-action=review][data-status=approved]').length===n,remaining-1);}
+
  assert.deepEqual(errors,[]);await page.close();
  page=await miniPage(800002);await page.goto(origin+'/miniapp',{waitUntil:'networkidle'});await page.getByRole('button',{name:'Создать аккаунт через Telegram',exact:true}).click();await page.locator('#telegram-form input[name=adult]').check();await page.locator('#telegram-form input[name=terms]').check();await page.getByRole('button',{name:'Продолжить через Telegram',exact:true}).click();await page.locator('#profile-form').waitFor();assert.equal(h.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_accounts').get().n,2);assert.equal(await page.getByRole('button',{name:'Модерация',exact:true}).count(),0);
- console.log('Mini App browser PASS with cookies blocked: explicit existing-account login → protected photos → link → reload → automatic same owner/level/admin; new Telegram signup remains separate. SDK mocked.');
+ console.log('Mini App browser PASS with cookies blocked: explicit existing-account login → protected photos → link → reload → automatic same owner/level/admin; protected video/audio playback and moderation; new Telegram signup remains separate. SDK mocked.');
 }catch(e){if(page){await mkdir('outputs',{recursive:true});await page.screenshot({path:'outputs/miniapp-failure.png',fullPage:true});console.log('Images:',await page.locator('.gallery-item img').evaluateAll(xs=>xs.map(x=>({src:x.getAttribute('src'),auth:x.dataset.authImage,loading:x.dataset.authLoading,width:x.naturalWidth,complete:x.complete,alt:x.alt}))));console.log('Errors:',await page.locator('#toast').innerText());}throw e;}
 finally{await browser.close();h.server.closeAllConnections();await new Promise(r=>h.server.close(r));await rm(dir,{recursive:true,force:true});}

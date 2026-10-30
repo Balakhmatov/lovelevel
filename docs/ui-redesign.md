@@ -13,8 +13,8 @@ A charcoal-purple (#302632) level card gives progression visual weight without g
 Desktop: 220px navigation, compact page heading, flexible content and 264px
 status rail. Mobile: five fixed navigation destinations, admin action in the
 header, compact status card before content, safe-area spacing and readable form
-fields. Main touch actions are at least 44px high. Future video and voice
-features are explicitly marked as in development.
+fields. Main touch actions are at least 44px high. Video upload and voice recording/upload are available at every level; viewing
+uses the access threshold chosen by the author.
 
 ## Screen copy
 

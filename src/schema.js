@@ -1,4 +1,4 @@
-import {sqliteTable,text,integer,primaryKey} from 'drizzle-orm/sqlite-core';
+import {sqliteTable,text,integer,real,primaryKey} from 'drizzle-orm/sqlite-core';
 export const profiles=sqliteTable('profiles',{id:text('id').primaryKey(),name:text('name').notNull(),birthdate:text('birthdate').notNull(),city:text('city').notNull(),gender:text('gender').notNull(),seeking:text('seeking').notNull().default('all'),bio:text('bio').notNull().default(''),intent:text('intent').notNull(),interests:text('interests').notNull().default('[]'),created:text('created').notNull(),paused:integer('paused').notNull().default(0)});
 export const rewards=sqliteTable('rewards',{user:text('user').notNull(),key:text('key').notNull(),points:integer('points').notNull(),created:text('created').notNull()},t=>[primaryKey({columns:[t.user,t.key]})]);
 export const media=sqliteTable('media',{id:text('id').primaryKey(),user:text('user').notNull(),key:text('key').notNull(),mime:text('mime').notNull(),min:integer('min').notNull().default(1),basic:integer('basic').notNull().default(0),status:text('status').notNull().default('pending'),created:text('created').notNull()});
@@ -13,3 +13,7 @@ export const authLimits=sqliteTable('auth_limits',{key:text('key').notNull(),buc
 export const authTelegramLinks=sqliteTable('auth_telegram_links',{telegramId:text('telegram_id').primaryKey(),account:text('account').notNull().unique().references(()=>authAccounts.id,{onDelete:'cascade'}),username:text('username').notNull().default(''),created:integer('created').notNull()});
 export const authTelegramChallenges=sqliteTable('auth_telegram_challenges',{tokenHash:text('token_hash').primaryKey(),account:text('account').references(()=>authAccounts.id,{onDelete:'cascade'}),mode:text('mode').notNull(),expires:integer('expires').notNull()});
 export const authTelegramProofs=sqliteTable('auth_telegram_proofs',{hash:text('hash').primaryKey(),expires:integer('expires').notNull()});
+
+export const progressionState=sqliteTable('progression_state',{user:text('user').primaryKey(),maxLevel:integer('max_level').notNull().default(1),photoAccess:integer('photo_access').notNull().default(0)});
+export const visitDays=sqliteTable('visit_days',{user:text('user').notNull(),day:text('day').notNull()},t=>[primaryKey({columns:[t.user,t.day]})]);
+export const mediaMetadata=sqliteTable('media_metadata',{mediaId:text('media_id').primaryKey().references(()=>media.id,{onDelete:'cascade'}),duration:real('duration').notNull(),width:integer('width').notNull().default(0),height:integer('height').notNull().default(0)});
