@@ -31,12 +31,12 @@ async function api(request,env){
  if(!env.DB||!env.BUCKET)return J({error:'База или хранилище ещё не подключены. Попробуйте позже.'},503);
  if(method!=='GET'&&method!=='HEAD'){
   if(request.headers.get('Origin')!==url.origin)return J({error:'Недопустимый источник запроса'},403);
-  const len=Number(request.headers.get('content-length')||0);if(len>6*1024*1024)return J({error:'Файл слишком большой'},413);
+  const len=Number(request.headers.get('content-length')||0);if(len>52*1024*1024)return J({error:'Файл слишком большой'},413);
  }
  const profile=await one(env,'SELECT * FROM profiles WHERE id=?',id);
  if(path==='/api/me'&&method==='GET'){
   const progress=await progression(env,id,profile,true);
-  return J({id,admin:isAdmin(request,env,id),profile:profile?await publicProfile(env,profile,id,progress.level):null,level:progress.level,days:progress.days,tasks:progress.tasks,rulesVersion:'2026-10-milestones',mediaLimits:{photo:12,video:2,voice:2,videoSeconds:5,voiceSeconds:30,maxBytes:5*1024*1024}});
+  return J({id,admin:isAdmin(request,env,id),profile:profile?await publicProfile(env,profile,id,progress.level):null,level:progress.level,days:progress.days,tasks:progress.tasks,rulesVersion:'2026-10-milestones',mediaLimits:{photo:12,video:2,voice:2,videoSeconds:30,voiceSeconds:30,maxBytes:5*1024*1024,maxClipSourceBytes:50*1024*1024,maxVideoBytes:3*1024*1024,maxVoiceBytes:192*1024}});
  }
  if(path==='/api/birthdate'&&method==='GET')return J({birthdate:profile?.birthdate||null});
  if(path==='/api/profile'&&method==='POST'){
@@ -73,7 +73,8 @@ async function api(request,env){
   const bytes=new Uint8Array(await file.arrayBuffer());
   if(kind==='photo'){const valid=mime==='image/jpeg'?bytes[0]===255&&bytes[1]===216&&bytes[2]===255:mime==='image/png'?bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71:bytes[0]===82&&bytes[1]===73&&bytes[2]===70&&bytes[3]===70&&String.fromCharCode(...bytes.slice(8,12))==='WEBP';if(!valid)err('Формат файла не соответствует изображению');}
   const duration=Number(request.headers.get('x-lovelevel-media-duration'));
-  if(kind!=='photo'&&(!duration||duration>(kind==='video'?5.25:30.25)))err('Файл не прошёл проверку длительности');
+  if(kind!=='photo'&&(!duration||duration>30.25||request.headers.get('x-lovelevel-media-compressed')!=='1'))err('Файл не прошёл проверку длительности');
+  if(kind!=='photo'&&file.size>(kind==='video'?3*1024*1024:192*1024))err('Материал превышает лимит после сжатия');
   const min=Number(form.get('min')||1);if(!Number.isInteger(min)||min<1||min>10)err('Выберите уровень от 1 до 10');
   const mid=crypto.randomUUID(),key='photos/'+id+'/'+mid;const basic=kind==='photo'&&count===0?1:0;
   await env.BUCKET.put(key,bytes,{httpMetadata:{contentType:file.type}});

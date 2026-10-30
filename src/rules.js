@@ -16,7 +16,7 @@ export function milestoneTasks(profile,{photos=0,likes=0,days=0,privacy=false,vi
  {key:'two-days',targetLevel:6,label:'Пользоваться приложением в 2 разных дня',hint:`${Math.min(days,2)} из 2 дней · не обязательно подряд`,tool:'days',ready:days>=2},
  {key:'photo-access',targetLevel:7,label:'Настроить доступ к своим фотографиям',hint:'Сохрани уровень доступа для дополнительного фото',tool:'privacy',ready:!!privacy},
  {key:'four-days',targetLevel:8,label:'Пользоваться приложением в 4 разных дня',hint:`${Math.min(days,4)} из 4 дней · не обязательно подряд`,tool:'days',ready:days>=4},
- {key:'first-video',targetLevel:9,label:'Добавить короткое видео',hint:'До 5 секунд · загрузка доступна уже сейчас',tool:'video',ready:videos>0},
+ {key:'first-video',targetLevel:9,label:'Добавить короткое видео',hint:'До 30 секунд · загрузка доступна уже сейчас',tool:'video',ready:videos>0},
  {key:'first-voice',targetLevel:10,label:'Добавить голосовое',hint:'Запиши или загрузи голосовое до 30 секунд',tool:'voice',ready:voices>0}
  ];
 }
