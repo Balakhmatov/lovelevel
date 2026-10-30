@@ -25,6 +25,7 @@ try{
    assert.equal(await page.locator('body').evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()),'#fff9f6');
    if(key!=='admin')assert.equal(await page.locator('.level-panel').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 229, 239)');
    if(key!=='admin'){
+    assert.equal(await page.locator('.heading').count(),0,'No duplicate screen heading');
     assert.equal(await page.locator('.level-number>strong').evaluate(el=>getComputedStyle(el).whiteSpace),'nowrap');
     const nav=await page.locator('.nav button.active').evaluate(el=>({color:getComputedStyle(el).color,size:parseFloat(getComputedStyle(el).fontSize)}));
     assert.equal(nav.color,'rgb(151, 36, 79)');assert.ok(nav.size>=(width<=700?10:15));

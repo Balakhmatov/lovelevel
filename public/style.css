@@ -204,3 +204,6 @@ body{font-size:15px;line-height:1.5}
 @media(max-width:370px){.chat-circle{width:190px;height:190px}.chat-media-tools .secondary{flex-basis:100%}}
 #chat-media-form [hidden]{display:none}.chat-file-picker summary{font-size:13px;color:#a42c5b;cursor:pointer;min-height:36px;display:flex;align-items:center;gap:8px}.chat-file-picker summary:before{content:'+';font-size:20px}.chat-file-picker[open] summary:before{content:'−'}#chat-media-preview:empty{margin:0}
 .chat-circle{height:auto;aspect-ratio:1}
+/* Screen identity lives in navigation/topbar; content starts without duplicate headings. */
+.main>.workspace{margin-top:24px}
+@media(max-width:700px){.main>.workspace{margin-top:18px}}

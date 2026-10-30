@@ -103,7 +103,7 @@ async function api(request,env){
  }
  if(path==='/api/matches'&&method==='GET'){
   const rows=await all(env,'SELECT p.* FROM profiles p JOIN likes a ON a.recipient=p.id AND a.sender=? JOIN likes b ON b.sender=p.id AND b.recipient=? WHERE NOT EXISTS(SELECT 1 FROM blocks WHERE (sender=? AND recipient=p.id) OR (recipient=? AND sender=p.id)) ORDER BY a.created DESC',id,id,id,id);const current=(await progression(env,id,profile)).level;
-  return J({matches:await Promise.all(rows.map(async p=>({...await publicProfile(env,p,id,current),last:await one(env,'SELECT body,created,sender FROM messages WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?) ORDER BY created DESC LIMIT 1',id,p.id,p.id,id)})))});
+  return J({matches:await Promise.all(rows.map(async p=>({...await publicProfile(env,p,id,current),last:await one(env,'SELECT m.body,m.created,m.sender,c.mime FROM messages m LEFT JOIN chat_media c ON c.message=m.id WHERE (m.sender=? AND m.recipient=?) OR (m.sender=? AND m.recipient=?) ORDER BY m.created DESC,m.id DESC LIMIT 1',id,p.id,p.id,id)})))});
  }
  if(path==='/api/chat-settings'&&method==='PATCH'){const b=await request.json();if(typeof b.receiveVideo!=='boolean')err('Неверная настройка');await run(env,'INSERT INTO chat_settings(user,receive_video) VALUES(?,?) ON CONFLICT(user) DO UPDATE SET receive_video=excluded.receive_video',id,b.receiveVideo?1:0);return J({ok:true});}
  if(path==='/api/chat-upload'&&method==='POST'){
@@ -111,15 +111,15 @@ async function api(request,env){
   if(!['voice','video'].includes(kind))err('Неверный тип сообщения');
   if(!profile||await blocked(env,id,target)||!await matched(env,id,target))err('Переписка доступна после взаимного лайка',403);
   if(kind==='video'){
-   if(!await one(env,'SELECT 1 FROM subscriptions WHERE user=? AND expires>?',id,stamp()))err('Видеокружочки доступны в LoveLevel Plus',402);
+   if(!await one(env,'SELECT 1 FROM subscriptions WHERE user=? AND expires>?',id,stamp()))err('Видеосообщения доступны в LoveLevel Plus',402);
    if((await one(env,'SELECT receive_video FROM chat_settings WHERE user=?',target))?.receive_video===0)err('Собеседник отключил видеосообщения',403);
-   if((await one(env,"SELECT COUNT(*) AS n FROM messages m JOIN chat_media c ON c.message=m.id WHERE m.sender=? AND c.mime='video/mp4' AND m.created>?",id,new Date(Date.now()-86400000).toISOString())).n>=20)err('Лимит — 20 видеокружочков за 24 часа',429);
+   if((await one(env,"SELECT COUNT(*) AS n FROM messages m JOIN chat_media c ON c.message=m.id WHERE m.sender=? AND c.mime='video/mp4' AND m.created>?",id,new Date(Date.now()-86400000).toISOString())).n>=20)err('Лимит — 20 видеосообщений за 24 часа',429);
   }
   if((await one(env,'SELECT COUNT(*) AS n FROM messages WHERE sender=? AND created>?',id,new Date(Date.now()-60000).toISOString())).n>=20)err('Слишком много сообщений. Повторите позже.',429);
   const form=await request.formData(),file=form.get('file'),duration=Number(request.headers.get('x-lovelevel-media-duration'));
   if(!(file instanceof File)||request.headers.get('x-lovelevel-media-compressed')!=='1'||!Number.isFinite(duration)||duration<=0||duration>(kind==='video'?10:30)+.25||file.type!==(kind==='video'?'video/mp4':'audio/mp4')||file.size>(kind==='video'?1024*1024:192*1024))err('Недопустимый файл сообщения');
   const mid=crypto.randomUUID(),key='chat/'+id+'/'+mid;await env.BUCKET.put(key,new Uint8Array(await file.arrayBuffer()),{httpMetadata:{contentType:file.type}});
-  try{if(!await one(env,'SELECT 1 FROM profiles WHERE id=?',id)||!await one(env,'SELECT 1 FROM profiles WHERE id=?',target)||await blocked(env,id,target)||!await matched(env,id,target))err('Переписка недоступна',403);await env.DB.batch([env.DB.prepare('INSERT INTO messages(id,sender,recipient,body,created) VALUES(?,?,?,?,?)').bind(mid,id,target,kind==='video'?'Видеокружочек':'Голосовое сообщение',stamp()),env.DB.prepare('INSERT INTO chat_media(message,key,mime,duration) VALUES(?,?,?,?)').bind(mid,key,file.type,duration)]);}catch(e){await env.BUCKET.delete(key);throw e;}return J({ok:true,id:mid});
+  try{if(!await one(env,'SELECT 1 FROM profiles WHERE id=?',id)||!await one(env,'SELECT 1 FROM profiles WHERE id=?',target)||await blocked(env,id,target)||!await matched(env,id,target))err('Переписка недоступна',403);await env.DB.batch([env.DB.prepare('INSERT INTO messages(id,sender,recipient,body,created) VALUES(?,?,?,?,?)').bind(mid,id,target,kind==='video'?'Видеосообщение':'Голосовое сообщение',stamp()),env.DB.prepare('INSERT INTO chat_media(message,key,mime,duration) VALUES(?,?,?,?)').bind(mid,key,file.type,duration)]);}catch(e){await env.BUCKET.delete(key);throw e;}return J({ok:true,id:mid});
  }
  const attachment=path.match(/^\/api\/chat-media\/([a-zA-Z0-9-]+)$/);
  if(attachment&&method==='GET'){
