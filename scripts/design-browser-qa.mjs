@@ -22,8 +22,8 @@ try{
   for(const [name,key] of [['Знакомства','discover'],['Симпатии','matches'],['Сообщения','messages'],['Мой уровень','levels'],['Мой профиль','profile'],['Модерация','admin']]){
    await page.getByRole('button',{name,exact:true}).filter({visible:true}).click();await page.waitForTimeout(100);
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${key}: overflow at ${width}`);
-   assert.equal(await page.locator('body').evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()),'#f7f5f2');
-   if(key!=='admin')assert.equal(await page.locator('.level-panel').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(48, 38, 50)');
+   assert.equal(await page.locator('body').evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()),'#faf7f4');
+   if(key!=='admin')assert.equal(await page.locator('.level-panel').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(242, 227, 235)');
    await page.screenshot({path:`outputs/design-${key}-${width}.png`,fullPage:true});
   }
   await page.getByRole('button',{name:'Знакомства',exact:true}).click();await page.getByRole('button',{name:'Посмотреть демо',exact:true}).click();await page.screenshot({path:`outputs/design-demo-${width}.png`,fullPage:true});
