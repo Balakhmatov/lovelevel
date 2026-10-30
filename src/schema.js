@@ -17,3 +17,7 @@ export const authTelegramProofs=sqliteTable('auth_telegram_proofs',{hash:text('h
 export const progressionState=sqliteTable('progression_state',{user:text('user').primaryKey(),maxLevel:integer('max_level').notNull().default(1),photoAccess:integer('photo_access').notNull().default(0),railHidden:integer('rail_hidden').notNull().default(0)});
 export const visitDays=sqliteTable('visit_days',{user:text('user').notNull(),day:text('day').notNull()},t=>[primaryKey({columns:[t.user,t.day]})]);
 export const mediaMetadata=sqliteTable('media_metadata',{mediaId:text('media_id').primaryKey().references(()=>media.id,{onDelete:'cascade'}),duration:real('duration').notNull(),width:integer('width').notNull().default(0),height:integer('height').notNull().default(0)});
+
+export const chatMedia=sqliteTable('chat_media',{message:text('message').primaryKey().references(()=>messages.id,{onDelete:'cascade'}),key:text('key').notNull(),mime:text('mime').notNull(),duration:real('duration').notNull()});
+export const chatSettings=sqliteTable('chat_settings',{user:text('user').primaryKey(),receiveVideo:integer('receive_video').notNull().default(1)});
+export const subscriptions=sqliteTable('subscriptions',{user:text('user').primaryKey(),expires:text('expires').notNull()});

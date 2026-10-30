@@ -27,7 +27,7 @@ export function openDatabase(filename, migrations = resolve('drizzle')) {
 
 export function diskBucket(directory,{maxBytes=8*1024**3,minFreeBytes=1024**3}={}) {
   const root=resolve(directory);mkdirSync(root,{recursive:true,mode:0o700});
-  function pathFor(key) { if (!/^photos\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9-]+$/.test(key))throw new Error('Invalid media key');const path=resolve(root,key);if(!path.startsWith(root+sep))throw new Error('Invalid media path');return path; }
+  function pathFor(key) { if (!/^(?:photos|chat)\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9-]+$/.test(key))throw new Error('Invalid media key');const path=resolve(root,key);if(!path.startsWith(root+sep))throw new Error('Invalid media path');return path; }
   let usage=null,chain=Promise.resolve();
   async function measure(path){let total=0;for(const entry of await readdir(path,{withFileTypes:true})){const child=resolve(path,entry.name);if(entry.isDirectory())total+=await measure(child);else if(entry.isFile())total+=(await stat(child)).size;}return total;}
   function serial(action){const next=chain.then(action,action);chain=next.catch(()=>{});return next;}

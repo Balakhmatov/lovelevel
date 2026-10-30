@@ -36,6 +36,13 @@
       "when": 1793372842795,
       "tag": "0004_level_panel_preference",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1793374440522,
+      "tag": "0005_chat_recordings",
+      "breakpoints": true
     }
   ]
 }

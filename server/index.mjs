@@ -24,14 +24,25 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
    const path=new URL(req.url,origin);if(!req.url.startsWith('/')||req.url.startsWith('//')||path.origin!==origin){res.writeHead(400);res.end();return;}
    // Nginx overwrites this header. The service itself must bind only to loopback.
    const ip=req.socket.remoteAddress==='127.0.0.1'||req.socket.remoteAddress==='::1'?String(req.headers['x-real-ip']||req.socket.remoteAddress):req.socket.remoteAddress;
-   if(path.pathname==='/api/upload'){
+   if(['/api/upload','/api/chat-upload'].includes(path.pathname)){
     const early=auth.current(new Request(path,{headers:{Cookie:req.headers.cookie||'',Authorization:req.headers.authorization||''}}));
     const status=!early?401:req.headers.origin!==origin?403:!sqlite.prepare('SELECT 1 FROM profiles WHERE id=?').get(early.id)?409:uploads>=1?429:0;
     if(status){res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:status===401?'Войдите в аккаунт':status===403?'Недопустимый источник запроса':status===409?'Сначала создайте анкету':'Загружается другой файл. Повторите через несколько секунд.'}));req.resume();return;}
+    if(path.pathname==='/api/chat-upload'){
+     const target=path.searchParams.get('target'),kind=path.searchParams.get('kind');
+     const mutual=sqlite.prepare('SELECT 1 FROM likes a JOIN likes b ON a.sender=b.recipient AND a.recipient=b.sender WHERE a.sender=? AND a.recipient=?').get(early.id,target);
+     const block=sqlite.prepare('SELECT 1 FROM blocks WHERE (sender=? AND recipient=?) OR (recipient=? AND sender=?)').get(early.id,target,early.id,target);
+     const plus=sqlite.prepare('SELECT 1 FROM subscriptions WHERE user=? AND expires>?').get(early.id,new Date().toISOString());
+     const receiver=sqlite.prepare('SELECT receive_video FROM chat_settings WHERE user=?').get(target);
+     const count=sqlite.prepare("SELECT COUNT(*) AS n FROM chat_media c JOIN messages m ON m.id=c.message WHERE m.sender=? AND c.mime='video/mp4' AND m.created>=?").get(early.id,new Date(Date.now()-86400000).toISOString()).n;
+     const recent=sqlite.prepare('SELECT COUNT(*) AS n FROM messages WHERE sender=? AND created>?').get(early.id,new Date(Date.now()-60000).toISOString()).n;
+     const fail=!['voice','video'].includes(kind)?400:!mutual||block?403:kind==='video'&&!plus?402:kind==='video'&&receiver?.receive_video===0?403:kind==='video'&&count>=20||recent>=20?429:0;
+     if(fail){res.writeHead(fail,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:fail===402?'Видеокружочки доступны в LoveLevel Plus':fail===429?(kind==='video'&&count>=20?'Лимит — 20 видеокружочков за 24 часа':'Слишком много сообщений. Повторите позже.'):fail===400?'Выберите голосовое или видео':'Отправка этому пользователю недоступна'}));req.resume();return;}
+    }
     uploads++;uploadSlot=true;
     const space=await statfs(dataDir);if(space.bavail*space.bsize<1024**3+50*1024**2){res.writeHead(507,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'На сервере недостаточно свободного места. Загрузки временно недоступны.'}));req.resume();return;}
    }
-   const limit=path.pathname==='/api/upload'?52*1024*1024:64*1024;
+   const limit=['/api/upload','/api/chat-upload'].includes(path.pathname)?52*1024*1024:64*1024;
    if(Number(req.headers['content-length']||0)>limit){res.writeHead(413,{'Content-Type':'application/json'});res.end('{"error":"Запрос слишком большой"}');req.resume();return;}
    const chunks=[];let total=0;for await(const c of req){total+=c.length;if(total>limit){res.writeHead(413,{'Content-Type':'application/json'});res.end('{"error":"Запрос слишком большой"}');return;}chunks.push(c);}
    const headers=new Headers();for(const [key,value] of Object.entries(req.headers)){if(value!==undefined&&!key.toLowerCase().startsWith('oai-')&&!key.toLowerCase().startsWith('x-lovelevel-'))headers.set(key,Array.isArray(value)?value.join(', '):value);}
@@ -39,9 +50,9 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
    const identity=auth.current(request);
    if(identity)headers.set('x-lovelevel-user-id',identity.id);
    let processedForm=null;
-   if(path.pathname==='/api/upload'&&method==='POST'&&identity&&headers.get('origin')===origin){
+   if(['/api/upload','/api/chat-upload'].includes(path.pathname)&&method==='POST'&&identity&&headers.get('origin')===origin){
     const form=await request.clone().formData(),file=form.get('file');
-    if(file instanceof File&&!file.type.startsWith('image/')){try{const info=await inspectClip(file);headers.set('x-lovelevel-media-duration',String(info.duration));headers.set('x-lovelevel-media-compressed','1');form.set('file',new File([info.bytes],info.mime==='video/mp4'?'video.mp4':'voice.m4a',{type:info.mime}));processedForm=form;}catch(error){res.writeHead(error.status||400,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:error.message}));return;}}
+    if(file instanceof File&&!file.type.startsWith('image/')){try{const info=await inspectClip(file,{circle:path.pathname==='/api/chat-upload'&&path.searchParams.get('kind')==='video'});headers.set('x-lovelevel-media-duration',String(info.duration));headers.set('x-lovelevel-media-compressed','1');form.set('file',new File([info.bytes],info.mime==='video/mp4'?'video.mp4':'voice.m4a',{type:info.mime}));processedForm=form;}catch(error){res.writeHead(error.status||400,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:error.message}));return;}}
    }
    if(processedForm){headers.delete('content-type');headers.delete('content-length');}
    request=new Request(path,{method,headers,body:processedForm||(['GET','HEAD'].includes(method)?undefined:Buffer.concat(chunks))});
