@@ -22,11 +22,21 @@ try{
   for(const [name,key] of [['Знакомства','discover'],['Симпатии','matches'],['Сообщения','messages'],['Мой уровень','levels'],['Мой профиль','profile'],['Модерация','admin']]){
    await page.getByRole('button',{name,exact:true}).filter({visible:true}).click();await page.waitForTimeout(100);
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${key}: overflow at ${width}`);
-   assert.equal(await page.locator('body').evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()),'#faf7f4');
-   if(key!=='admin')assert.equal(await page.locator('.level-panel').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(242, 227, 235)');
+   assert.equal(await page.locator('body').evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()),'#fff9f6');
+   if(key!=='admin')assert.equal(await page.locator('.level-panel').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 229, 239)');
+   if(key!=='admin'){
+    assert.equal(await page.locator('.level-number>strong').evaluate(el=>getComputedStyle(el).whiteSpace),'nowrap');
+    const nav=await page.locator('.nav button.active').evaluate(el=>({color:getComputedStyle(el).color,size:parseFloat(getComputedStyle(el).fontSize)}));
+    assert.equal(nav.color,'rgb(151, 36, 79)');assert.ok(nav.size>=(width<=700?10:15));
+   }
    await page.screenshot({path:`outputs/design-${key}-${width}.png`,fullPage:true});
   }
-  await page.getByRole('button',{name:'Знакомства',exact:true}).click();await page.getByRole('button',{name:'Посмотреть демо',exact:true}).click();await page.screenshot({path:`outputs/design-demo-${width}.png`,fullPage:true});
+  await page.getByRole('button',{name:'Знакомства',exact:true}).click();
+  await page.getByRole('button',{name:'Фильтры',exact:true}).click();
+  assert.equal(await page.locator('.modal input').first().evaluate(el=>getComputedStyle(el).fontSize),'16px');
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  await page.screenshot({path:`outputs/design-filters-${width}.png`,fullPage:true});await page.keyboard.press('Escape');
+  await page.getByRole('button',{name:'Посмотреть демо',exact:true}).click();await page.screenshot({path:`outputs/design-demo-${width}.png`,fullPage:true});
  }
  h.sqlite.prepare('INSERT INTO profiles VALUES(?,?,?,?,?,?,?,?,?,?,?)').run('design-peer','Анна','1996-01-01','Москва','woman','all','Архитектура, кино и поездки на выходные.','Знакомства и общение','["Кино"]',new Date().toISOString(),0);
  for(const [a,b] of [['design-owner','design-peer'],['design-peer','design-owner']])h.sqlite.prepare('INSERT INTO likes VALUES(?,?,?)').run(a,b,new Date().toISOString());
