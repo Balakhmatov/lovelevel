@@ -10,6 +10,7 @@ import {createAuth} from './auth.mjs';
 import {botMenu} from './bot-menu.mjs';
 import {inspectClip} from './media-probe.mjs';
 import {initMatchAI,handleMatchAI} from './matchlove-ai.mjs';
+import {handleSocial} from './matchlove-social.mjs';
 import app from '../dist/server/index.js';
 
 export function createServer({origin,dataDir,secureCookies=true,registration=false,inviteCode='',adminIds='',telegramBotToken='',telegramBotUsername='lovelevel_app_bot',host='127.0.0.1'}={}){
@@ -62,6 +63,7 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
    if(path.pathname==='/api/telegram/webhook')response=await botMenu(request,{token:telegramBotToken,origin});
    else if(path.pathname.startsWith('/api/auth/'))response=await auth.route(request,ip);
    else if(path.pathname==='/api/ai-match')response=await handleMatchAI(request,{sqlite,userId:identity?.id,apiKey:process.env.OPENAI_API_KEY,model:process.env.MATCHLOVE_AI_MODEL||'gpt-4.1-mini'});
+   else if(['/api/ml-social','/api/ml-like','/api/ml-chat'].includes(path.pathname))response=await handleSocial(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/account'&&method==='DELETE'){
     if(!identity)response=new Response('{"error":"Войдите в аккаунт"}',{status:401,headers:{'Content-Type':'application/json'}});
     else{response=await app.fetch(request,env);if(response.ok){sqlite.prepare('DELETE FROM auth_accounts WHERE id=?').run(identity.id);response.headers.set('Set-Cookie',`${auth.cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureCookies?'; Secure':''}`);}}
