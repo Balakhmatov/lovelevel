@@ -50,12 +50,15 @@ export function rankMatch(a,b){
  if(aToB.incompatible||bToA.incompatible)return null;
  // If only one partner specifies preferences, use that direction; never imply the other direction is confirmed.
  const known=[aToB,bToA].filter(x=>x.score!==null);
- const similarityScore=known.length?known.reduce((s,x)=>s+x.score,0)/known.length:35;
+ const selfSimilarity=[similarity(a.self.interests,b.self.interests),similarity(a.self.personality,b.self.personality),similarity(a.self.goal,b.self.goal)].filter(v=>v!==null);
+ const similarSelf=selfSimilarity.length?selfSimilarity.reduce((x,y)=>x+y,0)/selfSimilarity.length:null;
+ const similarityScore=known.length?known.reduce((s,x)=>s+x.score,0)/known.length:(similarSelf===null?25:Math.round(similarSelf*45+20));
  const confidence=known.length?known.reduce((s,x)=>s+x.known,0)/known.length:0;
  const geo=locationScore(a.self.location,b.self.location);
- const score=Math.round(Math.max(0,Math.min(100,similarityScore*.92+(geo===null?0:geo*8))));
+ const score=Math.round(Math.max(0,Math.min(100,similarityScore)));
  const mutual=known.length===2;
  const reasons=[...new Set([...aToB.reasons,...bToA.reasons])].filter(x=>x!=='Предпочтения').slice(0,4);
+ if(!known.length&&similarSelf!==null&&similarSelf>.1)reasons.push('Похожие интересы и ценности');
  if(geo===1)reasons.unshift('Один город');
  return {score,confidence:Math.round(confidence*100),mutual,location:geo===1?'same':geo===0?'different':'unknown',explanation:reasons.length?'Совпадает: '+reasons.slice(0,4).join(', '):'Данных для точного сравнения пока мало',reasons};
 }
@@ -75,7 +78,6 @@ async function parseWithOpenAI(source,{apiKey,model='gpt-4.1-mini'}){
  const parsed=JSON.parse(text);return {self:normalize(parsed.self),wanted:normalize(parsed.wanted)};
  }finally{clearTimeout(timeout)}
 }
-const PUBLIC_LIMIT=2000;
 export async function handleMatchAI(request,{sqlite,userId,apiKey,model}){
  if(!userId)return json({error:'Необходимо войти в аккаунт'},401);
  if(request.method==='POST'){
@@ -103,8 +105,8 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model}){
    let age=null;if(r.birthdate){const birth=new Date(r.birthdate);if(Number.isFinite(birth.getTime())){age=new Date().getUTCFullYear()-birth.getUTCFullYear();}}
    results.push({id:r.user,name:r.name||'Участник '+String(r.user).slice(0,4),city:r.city||parsed.self.location||'',age:age||parsed.self.age_min,score:detail.score,confidence:detail.confidence,mutual:detail.mutual,location:detail.location,explanation:detail.explanation});
   }
-  results.sort((a,b)=>b.score-a.score||b.confidence-a.confidence||a.name.localeCompare(b.name));
-  return json({saved:true,results:results.slice(0,PUBLIC_LIMIT),total:results.length,source:mine.source});
+  results.sort((a,b)=>b.score-a.score||b.confidence-a.confidence||(b.location==='same')-(a.location==='same')||a.name.localeCompare(b.name));
+  return json({saved:true,results,total:results.length,source:mine.source});
  }
  return json({error:'Метод не поддерживается'},405);
 }
