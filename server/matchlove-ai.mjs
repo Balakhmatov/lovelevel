@@ -159,7 +159,8 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model}){
    const vectorRelevance=bidirectionalVectors(myVectors,candidateVectors);
    let age=null;if(r.birthdate){const birth=new Date(r.birthdate);if(Number.isFinite(birth.getTime())){age=new Date().getUTCFullYear()-birth.getUTCFullYear();}}
    const stored=sqlite.prepare('SELECT * FROM matchlove_ai_cache WHERE viewer=? AND candidate=? AND viewer_updated=? AND candidate_updated=?').get(userId,r.user,mine.updated,r.updated);
-   const result={vectorRelevance,id:r.user,name:r.name||'Участник '+String(r.user).slice(0,4),city:r.city||parsed.self.location||'',age:age||parsed.self.age_min,score:detail.score,confidence:detail.confidence,mutual:detail.mutual,location:detail.location,explanation:detail.explanation};
+   const mainPhoto=sqlite.prepare('SELECT id FROM matchlove_photos WHERE user=? AND is_main=1').get(r.user);
+   const result={media:mainPhoto?[{url:'/api/profile-photo?user='+encodeURIComponent(r.user),kind:'photo'}]:[],vectorRelevance,id:r.user,name:r.name||'Участник '+String(r.user).slice(0,4),city:r.city||parsed.self.location||'',age:age||parsed.self.age_min,score:detail.score,confidence:detail.confidence,mutual:detail.mutual,location:detail.location,explanation:detail.explanation};
    if(stored){result.score=stored.score;result.confidence=stored.confidence;result.explanation=stored.explanation;result.aiEvaluated=true;}
    else toScore.push({id:r.user,profile:parsed,updated:r.updated,result,vectorRelevance});
    results.push(result);
