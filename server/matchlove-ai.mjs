@@ -30,7 +30,7 @@ function similarity(a,b){
 function ageFit(wanted,self){
  if(wanted.age_min===null&&wanted.age_max===null||self.age_min===null&&self.age_max===null)return null;
  const a=wanted.age_min??18,b=wanted.age_max??100,c=self.age_min??18,d=self.age_max??100;
- if(b<c)return Math.max(0,1-(c-b)/8);if(d<a)return Math.max(0,1-(a-d)/8);return 1;
+ if(b<c||d<a)return 0;return 1;
 }
 function genderFit(wanted,self){
  const g=wanted.gender.toLowerCase(),s=self.gender.toLowerCase();if(!g||!s||['любой','любая','все','all','не важно'].includes(g))return null;
@@ -47,20 +47,22 @@ function direction(self,wanted){
 function locationScore(a,b){if(!a||!b)return null;const x=tokenize(a),y=tokenize(b);return x.some(t=>y.includes(t))?1:0;}
 export function rankMatch(a,b){
  const aToB=direction(b.self,a.wanted),bToA=direction(a.self,b.wanted);
- if(aToB.incompatible||bToA.incompatible)return null;
+ // Explicit partner age bounds and requested gender are eligibility constraints, not soft preferences.
+ if(aToB.incompatible||bToA.incompatible||ageFit(a.wanted,b.self)===0||ageFit(b.wanted,a.self)===0)return null;
  // If only one partner specifies preferences, use that direction; never imply the other direction is confirmed.
  const known=[aToB,bToA].filter(x=>x.score!==null);
  const selfSimilarity=[similarity(a.self.interests,b.self.interests),similarity(a.self.personality,b.self.personality),similarity(a.self.goal,b.self.goal)].filter(v=>v!==null);
  const similarSelf=selfSimilarity.length?selfSimilarity.reduce((x,y)=>x+y,0)/selfSimilarity.length:null;
  const similarityScore=known.length?known.reduce((s,x)=>s+x.score,0)/known.length:(similarSelf===null?25:Math.round(similarSelf*45+20));
  const confidence=known.length?known.reduce((s,x)=>s+x.known,0)/known.length:0;
- const geo=locationScore(a.self.location,b.self.location);
+ const geoA=locationScore(a.wanted.location,b.self.location),geoB=locationScore(b.wanted.location,a.self.location);
+ const geo=geoA!==null&&geoB!==null?(geoA+geoB)/2:geoA??geoB??locationScore(a.self.location,b.self.location);
  const score=Math.round(Math.max(0,Math.min(100,similarityScore)));
  const mutual=known.length===2;
  const reasons=[...new Set([...aToB.reasons,...bToA.reasons])].filter(x=>x!=='Предпочтения').slice(0,4);
  if(!known.length&&similarSelf!==null&&similarSelf>.1)reasons.push('Похожие интересы и ценности');
- if(geo===1)reasons.unshift('Один город');
- return {score,confidence:Math.round(confidence*100),mutual,location:geo===1?'same':geo===0?'different':'unknown',explanation:reasons.length?'Совпадает: '+reasons.slice(0,4).join(', '):'Данных для точного сравнения пока мало',reasons};
+ if(geo===1)reasons.unshift('Подходит по локации');
+ return {score,confidence:Math.round(confidence*100),mutual,location:geo===1?'same':geo===0?'different':geo===.5?'partial':'unknown',explanation:reasons.length?'Совпадает: '+reasons.slice(0,4).join(', '):'Данных для точного сравнения пока мало',reasons};
 }
 export function initMatchAI(sqlite){
  sqlite.exec("CREATE TABLE IF NOT EXISTS matchlove_profiles (user TEXT PRIMARY KEY REFERENCES auth_accounts(id) ON DELETE CASCADE, source TEXT NOT NULL, parsed TEXT NOT NULL, updated TEXT NOT NULL);CREATE INDEX IF NOT EXISTS idx_matchlove_profiles_updated ON matchlove_profiles(updated);");
