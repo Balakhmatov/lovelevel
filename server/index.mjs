@@ -9,12 +9,14 @@ import {openDatabase,diskBucket} from './storage.mjs';
 import {createAuth} from './auth.mjs';
 import {botMenu} from './bot-menu.mjs';
 import {inspectClip} from './media-probe.mjs';
+import {initMatchAI,handleMatchAI} from './matchlove-ai.mjs';
 import app from '../dist/server/index.js';
 
 export function createServer({origin,dataDir,secureCookies=true,registration=false,inviteCode='',adminIds='',telegramBotToken='',telegramBotUsername='lovelevel_app_bot',host='127.0.0.1'}={}){
  const url=new URL(origin);if(url.origin!==origin||!['https:','http:'].includes(url.protocol))throw new Error('PUBLIC_ORIGIN must be an exact http(s) origin');
  if(!secureCookies&&!['127.0.0.1','localhost'].includes(url.hostname))throw new Error('Insecure cookies are permitted only on loopback');
  const {sqlite,DB}=openDatabase(resolve(dataDir,'lovelevel.sqlite'),resolve(dirname(fileURLToPath(import.meta.url)),'../drizzle'));
+ initMatchAI(sqlite);
  const auth=createAuth(sqlite,{origin,secure:secureCookies,registration,inviteCode,telegramBotToken,telegramBotUsername});
  const env={DB,BUCKET:diskBucket(resolve(dataDir,'uploads')),ADMIN_USER_IDS:adminIds};
  let uploads=0;
@@ -59,6 +61,7 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
    let response;
    if(path.pathname==='/api/telegram/webhook')response=await botMenu(request,{token:telegramBotToken,origin});
    else if(path.pathname.startsWith('/api/auth/'))response=await auth.route(request,ip);
+   else if(path.pathname==='/api/ai-match')response=await handleMatchAI(request,{sqlite,userId:identity?.id,apiKey:process.env.OPENAI_API_KEY,model:process.env.MATCHLOVE_AI_MODEL||'gpt-4.1-mini'});
    else if(path.pathname==='/api/account'&&method==='DELETE'){
     if(!identity)response=new Response('{"error":"Войдите в аккаунт"}',{status:401,headers:{'Content-Type':'application/json'}});
     else{response=await app.fetch(request,env);if(response.ok){sqlite.prepare('DELETE FROM auth_accounts WHERE id=?').run(identity.id);response.headers.set('Set-Cookie',`${auth.cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureCookies?'; Secure':''}`);}}
