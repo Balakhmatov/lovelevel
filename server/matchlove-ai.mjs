@@ -110,17 +110,26 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model}){
   try{
    const existing=sqlite.prepare('SELECT source,parsed FROM matchlove_profiles WHERE user=?').get(userId);
    let parsed=existing?.source===source?JSON.parse(existing.parsed):await parseWithOpenAI(source,{apiKey,model});
-   if(existing?.source!==source){
-    // The text is authoritative: only changed text triggers a new parse and embedding.
-    const embedded=await generateEmbeddings(parsed,{apiKey,model:process.env.MATCHLOVE_EMBEDDING_MODEL||EMBEDDING_MODEL});
+   const needsTextUpdate=existing?.source!==source;
+   const previousVectors=sqlite.prepare('SELECT source_updated,model FROM matchlove_vectors WHERE user=?').get(userId);
+   const currentUpdated=sqlite.prepare('SELECT updated FROM matchlove_profiles WHERE user=?').get(userId)?.updated;
+   const embeddingModel=process.env.MATCHLOVE_EMBEDDING_MODEL||EMBEDDING_MODEL;
+   const needsVectors=needsTextUpdate||!previousVectors||previousVectors.source_updated!==currentUpdated||previousVectors.model!==embeddingModel;
+   // Existing records created before embeddings are backfilled on the next search, without rerunning GPT parsing.
+   let embedded=null;
+   if(needsVectors){try{embedded=await generateEmbeddings(parsed,{apiKey,model:embeddingModel})}catch(error){console.error('MatchLove embedding unavailable:',error.name)}}
+   if(needsTextUpdate){
+    // Text changes always create a new profile revision; identical input keeps the old revision and GPT cache.
     const updated=new Date().toISOString();
     sqlite.exec('BEGIN IMMEDIATE');
     try{
      sqlite.prepare('INSERT INTO matchlove_profiles(user,source,parsed,updated) VALUES(?,?,?,?) ON CONFLICT(user) DO UPDATE SET source=excluded.source,parsed=excluded.parsed,updated=excluded.updated').run(userId,source,JSON.stringify(parsed),updated);
-     if(embedded)sqlite.prepare('INSERT INTO matchlove_vectors(user,source_updated,model,self_vector,wanted_vector) VALUES(?,?,?,?,?) ON CONFLICT(user) DO UPDATE SET source_updated=excluded.source_updated,model=excluded.model,self_vector=excluded.self_vector,wanted_vector=excluded.wanted_vector').run(userId,updated,process.env.MATCHLOVE_EMBEDDING_MODEL||EMBEDDING_MODEL,embedded.self?JSON.stringify(embedded.self):null,embedded.wanted?JSON.stringify(embedded.wanted):null);
+     if(embedded)sqlite.prepare('INSERT INTO matchlove_vectors(user,source_updated,model,self_vector,wanted_vector) VALUES(?,?,?,?,?) ON CONFLICT(user) DO UPDATE SET source_updated=excluded.source_updated,model=excluded.model,self_vector=excluded.self_vector,wanted_vector=excluded.wanted_vector').run(userId,updated,embeddingModel,embedded.self?JSON.stringify(embedded.self):null,embedded.wanted?JSON.stringify(embedded.wanted):null);
      else sqlite.prepare('DELETE FROM matchlove_vectors WHERE user=?').run(userId);
      sqlite.exec('COMMIT');
     }catch(error){sqlite.exec('ROLLBACK');throw error;}
+   }else if(needsVectors&&embedded){
+    sqlite.prepare('INSERT INTO matchlove_vectors(user,source_updated,model,self_vector,wanted_vector) VALUES(?,?,?,?,?) ON CONFLICT(user) DO UPDATE SET source_updated=excluded.source_updated,model=excluded.model,self_vector=excluded.self_vector,wanted_vector=excluded.wanted_vector').run(userId,currentUpdated,embeddingModel,embedded.self?JSON.stringify(embedded.self):null,embedded.wanted?JSON.stringify(embedded.wanted):null);
    }
    return json({ok:true,profile:parsed});
   }catch(e){return json({error:e.message==='OpenAI API не настроен на сервере'?e.message:'Не удалось разобрать текст через OpenAI'},e.status||502)}
