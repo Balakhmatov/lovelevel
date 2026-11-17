@@ -33,7 +33,7 @@ function ageFit(wanted,self){
  if(b<c||d<a)return 0;return 1;
 }
 function genderFit(wanted,self){
- const g=wanted.gender.toLowerCase(),s=self.gender.toLowerCase();if(!g||!s||['любой','любая','все','all','не важно'].includes(g))return null;
+ const canonical=v=>({мужчина:'male',парень:'male',мужской:'male',male:'male',man:'male',женщина:'female',девушка:'female',женский:'female',female:'female',woman:'female'}[v.toLowerCase()]||v.toLowerCase());const g=canonical(wanted.gender),s=canonical(self.gender);if(!g||!s||['любой','любая','все','all','не важно'].includes(g))return null;
  return g===s?1:0;
 }
 const WEIGHTS={age:28,goal:24,interests:20,appearance:10,sexual_preferences:7,personality:8,profession:3};
@@ -103,13 +103,13 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model}){
  if(!userId)return json({error:'Необходимо войти в аккаунт'},401);
  if(request.method==='POST'){
   if(request.headers.get('origin')!==new URL(request.url).origin)return json({error:'Недопустимый источник запроса'},403);
-  const body=await request.json().catch(()=>({}));const source=clean(body.text,4000);
-  if(source.length<15)return json({error:'Напиши о себе или о том, кого ищешь (не менее 15 символов)'},400);
+  const body=await request.json().catch(()=>({}));const source=typeof body.text==='string'?body.text.slice(0,4000):'';
+  if(source.trim().length<15)return json({error:'Напиши о себе или о том, кого ищешь (не менее 15 символов)'},400);
   if(!body.confirmAdult)return json({error:'Доступно только совершеннолетним'},400);
   try{
    const existing=sqlite.prepare('SELECT source,parsed FROM matchlove_profiles WHERE user=?').get(userId);
    let parsed=existing?.source===source?JSON.parse(existing.parsed):await parseWithOpenAI(source,{apiKey,model});
-   sqlite.prepare('INSERT INTO matchlove_profiles(user,source,parsed,updated) VALUES(?,?,?,?) ON CONFLICT(user) DO UPDATE SET source=excluded.source,parsed=excluded.parsed,updated=excluded.updated').run(userId,source,JSON.stringify(parsed),new Date().toISOString());
+   if(existing?.source!==source)sqlite.prepare('INSERT INTO matchlove_profiles(user,source,parsed,updated) VALUES(?,?,?,?) ON CONFLICT(user) DO UPDATE SET source=excluded.source,parsed=excluded.parsed,updated=excluded.updated').run(userId,source,JSON.stringify(parsed),new Date().toISOString());
    return json({ok:true,profile:parsed});
   }catch(e){return json({error:e.message==='OpenAI API не настроен на сервере'?e.message:'Не удалось разобрать текст через OpenAI'},e.status||502)}
  }
