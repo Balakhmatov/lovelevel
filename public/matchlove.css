@@ -37,3 +37,6 @@ textarea,.field{background:#0b0a0d;border:2px solid #48404a;border-radius:18px;c
 @media(max-width:390px){.cardgrid{grid-template-columns:1fr}.pic{height:290px}.why{min-height:0}.hero-art{min-height:155px}}
 
 .logo img{width:48px;height:48px;flex:none;object-fit:contain;border-radius:12px;filter:drop-shadow(0 2px 12px #ff355f33)}.hero-art .biglogo .logo{display:grid;place-items:center}.hero-art .biglogo .logo img{width:175px;height:175px;border-radius:30px}.hero-art .biglogo .logo span{display:none}.scanner img{width:100px;height:100px;border-radius:20px;filter:drop-shadow(0 8px 15px #ff355f77)}@media(max-width:740px){.hero-art .biglogo .logo img{width:105px;height:105px;border-radius:24px}}
+
+/* Match the rounded silhouette of the supplied icon, hiding its white corners. */
+.logo img,.hero-art .biglogo .logo img,.scanner img{border-radius:26%;clip-path:inset(0 round 26%)}
