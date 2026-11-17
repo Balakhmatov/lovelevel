@@ -1,3 +1,4 @@
+import {generateEmbeddings,bidirectionalVectors,EMBEDDING_MODEL} from './matchlove-embeddings.mjs';
 
 // MatchLove: user-authored self profile + independent partner preferences.
 // Parsing happens once per changed text; matching is deterministic and does not send other users' private data to an LLM.
@@ -65,7 +66,7 @@ export function rankMatch(a,b){
  return {score,confidence:Math.round(confidence*100),mutual,location:geo===1?'same':geo===0?'different':geo===.5?'partial':'unknown',explanation:reasons.length?'Совпадает: '+reasons.slice(0,4).join(', '):'Данных для точного сравнения пока мало',reasons};
 }
 export function initMatchAI(sqlite){
- sqlite.exec("CREATE TABLE IF NOT EXISTS matchlove_ai_cache(viewer TEXT NOT NULL, candidate TEXT NOT NULL, viewer_updated TEXT NOT NULL, candidate_updated TEXT NOT NULL, score INTEGER NOT NULL, confidence INTEGER NOT NULL, explanation TEXT NOT NULL, PRIMARY KEY(viewer,candidate));CREATE TABLE IF NOT EXISTS matchlove_profiles (user TEXT PRIMARY KEY REFERENCES auth_accounts(id) ON DELETE CASCADE, source TEXT NOT NULL, parsed TEXT NOT NULL, updated TEXT NOT NULL);CREATE INDEX IF NOT EXISTS idx_matchlove_profiles_updated ON matchlove_profiles(updated);");
+ sqlite.exec("CREATE TABLE IF NOT EXISTS matchlove_vectors(user TEXT PRIMARY KEY REFERENCES auth_accounts(id) ON DELETE CASCADE, source_updated TEXT NOT NULL, model TEXT NOT NULL, self_vector TEXT, wanted_vector TEXT);CREATE TABLE IF NOT EXISTS matchlove_ai_cache(viewer TEXT NOT NULL, candidate TEXT NOT NULL, viewer_updated TEXT NOT NULL, candidate_updated TEXT NOT NULL, score INTEGER NOT NULL, confidence INTEGER NOT NULL, explanation TEXT NOT NULL, PRIMARY KEY(viewer,candidate));CREATE TABLE IF NOT EXISTS matchlove_profiles (user TEXT PRIMARY KEY REFERENCES auth_accounts(id) ON DELETE CASCADE, source TEXT NOT NULL, parsed TEXT NOT NULL, updated TEXT NOT NULL);CREATE INDEX IF NOT EXISTS idx_matchlove_profiles_updated ON matchlove_profiles(updated);");
 }
 async function parseWithOpenAI(source,{apiKey,model='gpt-4.1-mini'}){
  if(!apiKey)throw Object.assign(new Error('OpenAI API не настроен на сервере'),{status:503});
@@ -109,33 +110,52 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model}){
   try{
    const existing=sqlite.prepare('SELECT source,parsed FROM matchlove_profiles WHERE user=?').get(userId);
    let parsed=existing?.source===source?JSON.parse(existing.parsed):await parseWithOpenAI(source,{apiKey,model});
-   if(existing?.source!==source)sqlite.prepare('INSERT INTO matchlove_profiles(user,source,parsed,updated) VALUES(?,?,?,?) ON CONFLICT(user) DO UPDATE SET source=excluded.source,parsed=excluded.parsed,updated=excluded.updated').run(userId,source,JSON.stringify(parsed),new Date().toISOString());
+   if(existing?.source!==source){
+    // The text is authoritative: only changed text triggers a new parse and embedding.
+    const embedded=await generateEmbeddings(parsed,{apiKey,model:process.env.MATCHLOVE_EMBEDDING_MODEL||EMBEDDING_MODEL});
+    const updated=new Date().toISOString();
+    sqlite.exec('BEGIN IMMEDIATE');
+    try{
+     sqlite.prepare('INSERT INTO matchlove_profiles(user,source,parsed,updated) VALUES(?,?,?,?) ON CONFLICT(user) DO UPDATE SET source=excluded.source,parsed=excluded.parsed,updated=excluded.updated').run(userId,source,JSON.stringify(parsed),updated);
+     if(embedded)sqlite.prepare('INSERT INTO matchlove_vectors(user,source_updated,model,self_vector,wanted_vector) VALUES(?,?,?,?,?) ON CONFLICT(user) DO UPDATE SET source_updated=excluded.source_updated,model=excluded.model,self_vector=excluded.self_vector,wanted_vector=excluded.wanted_vector').run(userId,updated,process.env.MATCHLOVE_EMBEDDING_MODEL||EMBEDDING_MODEL,embedded.self?JSON.stringify(embedded.self):null,embedded.wanted?JSON.stringify(embedded.wanted):null);
+     else sqlite.prepare('DELETE FROM matchlove_vectors WHERE user=?').run(userId);
+     sqlite.exec('COMMIT');
+    }catch(error){sqlite.exec('ROLLBACK');throw error;}
+   }
    return json({ok:true,profile:parsed});
   }catch(e){return json({error:e.message==='OpenAI API не настроен на сервере'?e.message:'Не удалось разобрать текст через OpenAI'},e.status||502)}
  }
  if(request.method==='GET'){
-  const mine=sqlite.prepare('SELECT source,parsed FROM matchlove_profiles WHERE user=?').get(userId);
+  const mine=sqlite.prepare('SELECT source,parsed,updated FROM matchlove_profiles WHERE user=?').get(userId);
   if(!mine)return json({results:[],saved:false});
   const myself=JSON.parse(mine.parsed);
   // Do not limit to "most recent 200" candidates: all eligible users are evaluated and sorted.
-  const rows=sqlite.prepare("SELECT m.user,m.parsed,m.updated,p.name,p.city,p.birthdate,p.gender FROM matchlove_profiles m LEFT JOIN profiles p ON p.id=m.user WHERE m.user<>? AND COALESCE(p.paused,0)=0 AND NOT EXISTS(SELECT 1 FROM blocks WHERE (sender=? AND recipient=m.user) OR (recipient=? AND sender=m.user))").all(userId,userId,userId);
+  const rows=sqlite.prepare("SELECT m.user,m.parsed,m.updated,v.source_updated AS vector_updated,v.model AS vector_model,v.self_vector,v.wanted_vector,p.name,p.city,p.birthdate,p.gender FROM matchlove_profiles m LEFT JOIN matchlove_vectors v ON v.user=m.user LEFT JOIN profiles p ON p.id=m.user WHERE m.user<>? AND COALESCE(p.paused,0)=0 AND NOT EXISTS(SELECT 1 FROM blocks WHERE (sender=? AND recipient=m.user) OR (recipient=? AND sender=m.user))").all(userId,userId,userId);
   const results=[],toScore=[];
+  const myVectorRow=sqlite.prepare('SELECT * FROM matchlove_vectors WHERE user=?').get(userId);
+  const embModel=process.env.MATCHLOVE_EMBEDDING_MODEL||EMBEDDING_MODEL;
+  const decode=x=>{if(!x)return null;try{const v=JSON.parse(x);return Array.isArray(v)?v:null}catch{return null}};
+  const myVectors=myVectorRow&&myVectorRow.source_updated===mine.updated&&myVectorRow.model===embModel?{self:decode(myVectorRow.self_vector),wanted:decode(myVectorRow.wanted_vector)}:null;
   for(const r of rows){
    let parsed;try{parsed=JSON.parse(r.parsed)}catch{continue}
    const detail=rankMatch(myself,parsed);if(!detail)continue;
+   const candidateVectors=myVectors&&r.vector_updated===r.updated&&r.vector_model===embModel?{self:decode(r.self_vector),wanted:decode(r.wanted_vector)}:null;
+   const vectorRelevance=bidirectionalVectors(myVectors,candidateVectors);
    let age=null;if(r.birthdate){const birth=new Date(r.birthdate);if(Number.isFinite(birth.getTime())){age=new Date().getUTCFullYear()-birth.getUTCFullYear();}}
-   const stored=sqlite.prepare('SELECT * FROM matchlove_ai_cache WHERE viewer=? AND candidate=? AND viewer_updated=? AND candidate_updated=?').get(userId,r.user,sqlite.prepare('SELECT updated FROM matchlove_profiles WHERE user=?').get(userId)?.updated,r.updated);
-   const result={id:r.user,name:r.name||'Участник '+String(r.user).slice(0,4),city:r.city||parsed.self.location||'',age:age||parsed.self.age_min,score:detail.score,confidence:detail.confidence,mutual:detail.mutual,location:detail.location,explanation:detail.explanation};
+   const stored=sqlite.prepare('SELECT * FROM matchlove_ai_cache WHERE viewer=? AND candidate=? AND viewer_updated=? AND candidate_updated=?').get(userId,r.user,mine.updated,r.updated);
+   const result={vectorRelevance,id:r.user,name:r.name||'Участник '+String(r.user).slice(0,4),city:r.city||parsed.self.location||'',age:age||parsed.self.age_min,score:detail.score,confidence:detail.confidence,mutual:detail.mutual,location:detail.location,explanation:detail.explanation};
    if(stored){result.score=stored.score;result.confidence=stored.confidence;result.explanation=stored.explanation;result.aiEvaluated=true;}
-   else toScore.push({id:r.user,profile:parsed,updated:r.updated,result});
+   else toScore.push({id:r.user,profile:parsed,updated:r.updated,result,vectorRelevance});
    results.push(result);
   }
-  // AI evaluates semantics only when the profile pair has changed. Cache saves repeated searches.
-  if(apiKey){for(let i=0;i<toScore.length;i+=AI_BATCH){const batch=toScore.slice(i,i+AI_BATCH);try{
+  // Embeddings pre-rank candidates for semantic AI comparison, without excluding any eligible profiles from results.
+  toScore.sort((a,b)=>(b.vectorRelevance??-1)-(a.vectorRelevance??-1)||b.result.score-a.result.score);
+  const rerank=toScore.slice(0,Math.min(45,toScore.length));
+  if(apiKey){for(let i=0;i<rerank.length;i+=AI_BATCH){const batch=rerank.slice(i,i+AI_BATCH);try{
    const semantic=await interpretPairsWithOpenAI(myself,batch,{apiKey,model:model||'gpt-4.1-mini'});
-   for(const c of batch){const v=semantic.get(c.id);if(!v)continue;Object.assign(c.result,v,{aiEvaluated:true});sqlite.prepare('INSERT OR REPLACE INTO matchlove_ai_cache(viewer,candidate,viewer_updated,candidate_updated,score,confidence,explanation) VALUES(?,?,?,?,?,?,?)').run(userId,c.id,sqlite.prepare('SELECT updated FROM matchlove_profiles WHERE user=?').get(userId).updated,c.updated,v.score,v.confidence,v.explanation);}
+   for(const c of batch){const v=semantic.get(c.id);if(!v)continue;Object.assign(c.result,v,{aiEvaluated:true});sqlite.prepare('INSERT OR REPLACE INTO matchlove_ai_cache(viewer,candidate,viewer_updated,candidate_updated,score,confidence,explanation) VALUES(?,?,?,?,?,?,?)').run(userId,c.id,mine.updated,c.updated,v.score,v.confidence,v.explanation);}
   }catch(e){console.error('MatchLove AI rerank unavailable:',e.name);break;}}}
-  results.sort((a,b)=>b.score-a.score||b.confidence-a.confidence||(b.location==='same')-(a.location==='same')||a.name.localeCompare(b.name));
+  results.sort((a,b)=>(b.aiEvaluated?1:0)-(a.aiEvaluated?1:0)||b.score-a.score||b.confidence-a.confidence||((b.vectorRelevance??-1)-(a.vectorRelevance??-1))||(b.location==='same')-(a.location==='same')||a.name.localeCompare(b.name));
   return json({saved:true,results,total:results.length,source:mine.source});
  }
  return json({error:'Метод не поддерживается'},405);
