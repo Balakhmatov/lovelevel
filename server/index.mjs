@@ -11,6 +11,7 @@ import {botMenu} from './bot-menu.mjs';
 import {inspectClip} from './media-probe.mjs';
 import {initMatchAI,handleMatchAI} from './matchlove-ai.mjs';
 import {handleSocial} from './matchlove-social.mjs';
+import {handleAccountGender} from './account-gender.mjs';
 import {handleSearchPhoto,SEARCH_PHOTO_LIMIT} from './search-photo.mjs';
 import app from '../dist/server/index.js';
 
@@ -71,12 +72,14 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
    if(path.pathname==='/api/telegram/webhook')response=await botMenu(request,{token:telegramBotToken,origin});
    else if(path.pathname.startsWith('/api/auth/'))response=await auth.route(request,ip);
    else if(['/api/search-photo','/api/search-photo-info','/api/profile-photo'].includes(path.pathname))response=await handleSearchPhoto(request,{sqlite,userId:identity?.id});
+   else if(path.pathname==='/api/account-gender')response=await handleAccountGender(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/ai-match')response=await handleMatchAI(request,{sqlite,userId:identity?.id,apiKey:process.env.OPENAI_API_KEY,model:process.env.MATCHLOVE_AI_MODEL||'gpt-6-luna'});
    else if(['/api/ml-social','/api/ml-like','/api/ml-chat'].includes(path.pathname))response=await handleSocial(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/account'&&method==='DELETE'){
     if(!identity)response=new Response('{"error":"Войдите в аккаунт"}',{status:401,headers:{'Content-Type':'application/json'}});
     else{response=await app.fetch(request,env);if(response.ok){sqlite.prepare('DELETE FROM auth_accounts WHERE id=?').run(identity.id);response.headers.set('Set-Cookie',`${auth.cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureCookies?'; Secure':''}`);}}
    }else response=await app.fetch(request,env);
+   if(path.pathname==='/api/me'&&response.ok&&identity){const me=await response.json();response=new Response(JSON.stringify({...me,gender:identity.gender||null}),{status:response.status,headers:response.headers});}
    const responseHeaders=Object.fromEntries(response.headers);responseHeaders['X-Content-Type-Options']='nosniff';responseHeaders['Referrer-Policy']='same-origin';if(path.pathname!=='/miniapp')responseHeaders['X-Frame-Options']='DENY';
    if(secureCookies)responseHeaders['Strict-Transport-Security']='max-age=31536000';
    res.writeHead(response.status,responseHeaders);

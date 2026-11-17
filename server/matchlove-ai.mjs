@@ -102,7 +102,7 @@ async function interpretPairsWithOpenAI(me,candidates,{apiKey,model}){
 
 export function applyGenderDefaults(parsed,gender){
  if(!['male','female'].includes(gender))return parsed;
- return {...parsed,self:{...parsed.self,gender},wanted:{...parsed.wanted,gender:parsed.wanted?.gender|| (gender==='male'?'female':'male')}};
+ return {...parsed,self:{...parsed.self,gender},wanted:{...parsed.wanted,gender:parsed.genderPreferenceExplicit===false?(gender==='male'?'female':'male'):(parsed.wanted?.gender|| (gender==='male'?'female':'male'))}};
 }
 
 export async function handleMatchAI(request,{sqlite,userId,apiKey,model}){
@@ -114,8 +114,10 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model}){
   if(!body.confirmAdult)return json({error:'Доступно только совершеннолетним'},400);
   try{
    const existing=sqlite.prepare('SELECT source,parsed FROM matchlove_profiles WHERE user=?').get(userId);
-   let parsed=existing?.source===source?JSON.parse(existing.parsed):await parseWithOpenAI(source,{apiKey,model});
+   const cached=existing?JSON.parse(existing.parsed):null;
+   let parsed=existing?.source===source&&typeof cached?.genderPreferenceExplicit==='boolean'?cached:await parseWithOpenAI(source,{apiKey,model});
    const account=sqlite.prepare('SELECT gender FROM auth_accounts WHERE id=?').get(userId);
+   parsed={...parsed,genderPreferenceExplicit:parsed.genderPreferenceExplicit??!!parsed.wanted?.gender};
    parsed=applyGenderDefaults(parsed,account?.gender);
    const needsTextUpdate=existing?.source!==source||existing?.parsed!==JSON.stringify(parsed);
    const previousVectors=sqlite.prepare('SELECT source_updated,model FROM matchlove_vectors WHERE user=?').get(userId);
