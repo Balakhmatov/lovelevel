@@ -11,6 +11,7 @@ import {botMenu} from './bot-menu.mjs';
 import {inspectClip} from './media-probe.mjs';
 import {initMatchAI,handleMatchAI} from './matchlove-ai.mjs';
 import {handleSocial} from './matchlove-social.mjs';
+import {handleSearchPhoto,SEARCH_PHOTO_LIMIT} from './search-photo.mjs';
 import app from '../dist/server/index.js';
 
 export function createServer({origin,dataDir,secureCookies=true,registration=false,inviteCode='',adminIds='',telegramBotToken='',telegramBotUsername='lovelevel_app_bot',host='127.0.0.1'}={}){
@@ -27,6 +28,13 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
    const path=new URL(req.url,origin);if(!req.url.startsWith('/')||req.url.startsWith('//')||path.origin!==origin){res.writeHead(400);res.end();return;}
    // Nginx overwrites this header. The service itself must bind only to loopback.
    const ip=req.socket.remoteAddress==='127.0.0.1'||req.socket.remoteAddress==='::1'?String(req.headers['x-real-ip']||req.socket.remoteAddress):req.socket.remoteAddress;
+   if(path.pathname==='/api/search-photo'&&req.method==='POST'){
+    const early=auth.current(new Request(path,{headers:{Cookie:req.headers.cookie||'',Authorization:req.headers.authorization||''}}));
+    const status=!early?401:req.headers.origin!==origin?403:uploads>=1?429:0;
+    if(status){res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:status===401?'Войдите в аккаунт':status===403?'Недопустимый источник запроса':'Загружается другой файл. Повторите через несколько секунд.'}));req.resume();return;}
+    uploads++;uploadSlot=true;
+    const space=await statfs(dataDir);if(space.bavail*space.bsize<1024**3+SEARCH_PHOTO_LIMIT){res.writeHead(507,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'На сервере недостаточно свободного места'}));req.resume();return;}
+   }
    if(['/api/upload','/api/chat-upload'].includes(path.pathname)){
     const early=auth.current(new Request(path,{headers:{Cookie:req.headers.cookie||'',Authorization:req.headers.authorization||''}}));
     const status=!early?401:req.headers.origin!==origin?403:!sqlite.prepare('SELECT 1 FROM profiles WHERE id=?').get(early.id)?409:uploads>=1?429:0;
@@ -45,7 +53,7 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
     uploads++;uploadSlot=true;
     const space=await statfs(dataDir);if(space.bavail*space.bsize<1024**3+50*1024**2){res.writeHead(507,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'На сервере недостаточно свободного места. Загрузки временно недоступны.'}));req.resume();return;}
    }
-   const limit=['/api/upload','/api/chat-upload'].includes(path.pathname)?52*1024*1024:64*1024;
+   const limit=path.pathname==='/api/search-photo'?SEARCH_PHOTO_LIMIT+64*1024:['/api/upload','/api/chat-upload'].includes(path.pathname)?52*1024*1024:64*1024;
    if(Number(req.headers['content-length']||0)>limit){res.writeHead(413,{'Content-Type':'application/json'});res.end('{"error":"Запрос слишком большой"}');req.resume();return;}
    const chunks=[];let total=0;for await(const c of req){total+=c.length;if(total>limit){res.writeHead(413,{'Content-Type':'application/json'});res.end('{"error":"Запрос слишком большой"}');return;}chunks.push(c);}
    const headers=new Headers();for(const [key,value] of Object.entries(req.headers)){if(value!==undefined&&!key.toLowerCase().startsWith('oai-')&&!key.toLowerCase().startsWith('x-lovelevel-'))headers.set(key,Array.isArray(value)?value.join(', '):value);}
@@ -62,6 +70,7 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
    let response;
    if(path.pathname==='/api/telegram/webhook')response=await botMenu(request,{token:telegramBotToken,origin});
    else if(path.pathname.startsWith('/api/auth/'))response=await auth.route(request,ip);
+   else if(['/api/search-photo','/api/search-photo-info'].includes(path.pathname))response=await handleSearchPhoto(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/ai-match')response=await handleMatchAI(request,{sqlite,userId:identity?.id,apiKey:process.env.OPENAI_API_KEY,model:process.env.MATCHLOVE_AI_MODEL||'gpt-6-luna'});
    else if(['/api/ml-social','/api/ml-like','/api/ml-chat'].includes(path.pathname))response=await handleSocial(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/account'&&method==='DELETE'){
