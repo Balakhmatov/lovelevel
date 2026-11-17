@@ -4,9 +4,6 @@ const name=(r)=>r.name||'Участник '+r.id.slice(0,6);
 const person=(r)=>({id:r.id,name:name(r),city:r.city||'',age:r.age_min||null});
 function checkBlocked(db,a,b){return !!db.prepare('SELECT 1 FROM blocks WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)').get(a,b,b,a)}
 function status(db,a,b){const sent=!!db.prepare('SELECT 1 FROM likes WHERE sender=? AND recipient=?').get(a,b);const received=!!db.prepare('SELECT 1 FROM likes WHERE sender=? AND recipient=?').get(b,a);return {liked:sent,likedMe:received,matched:sent&&received}}
-function users(db,owner,sql){
- return db.prepare("SELECT m.user AS id,COALESCE(p.name,'') AS name,COALESCE(p.city,'') AS city,CAST(json_extract(m.parsed,'$.self.age_min') AS INTEGER) AS age_min FROM matchlove_profiles m LEFT JOIN profiles p ON p.id=m.user WHERE m.user IN ("+sql+") AND m.user<>? AND NOT EXISTS(SELECT 1 FROM blocks WHERE (sender=? AND recipient=m.user) OR (sender=m.user AND recipient=?)) ORDER BY m.updated DESC").all(owner,owner,owner).map(person)
-}
 export async function handleSocial(request,{sqlite:db,userId:id}){
  if(!id)return J({error:'Войди в аккаунт'},401);
  const url=new URL(request.url),path=url.pathname,method=request.method;
@@ -20,7 +17,7 @@ export async function handleSocial(request,{sqlite:db,userId:id}){
  if(path==='/api/ml-like'&&method==='POST'){
   const body=await request.json().catch(()=>({})),target=typeof body.target==='string'?body.target.slice(0,100):'';
   if(!target||target===id||!db.prepare('SELECT 1 FROM matchlove_profiles WHERE user=?').get(target)||!db.prepare('SELECT 1 FROM matchlove_profiles WHERE user=?').get(id)||checkBlocked(db,id,target))return J({error:'Анкета недоступна'},404);
-  const count=db.prepare("SELECT COUNT(*) AS count FROM likes WHERE sender=? AND created>=datetime('now','-1 day')").get(id).count;
+  const count=db.prepare('SELECT COUNT(*) AS count FROM likes WHERE sender=? AND created>=?').get(id,new Date(Date.now()-86400000).toISOString()).count;
   if(count>=100&&!status(db,id,target).liked)return J({error:'Лимит 100 новых симпатий за сутки'},429);
   db.prepare('INSERT OR IGNORE INTO likes(sender,recipient,created) VALUES(?,?,?)').run(id,target,new Date().toISOString());
   return J({ok:true,...status(db,id,target)});
@@ -34,7 +31,7 @@ export async function handleSocial(request,{sqlite:db,userId:id}){
   const b=await request.json().catch(()=>({}));const target=typeof b.target==='string'?b.target.slice(0,100):'',message=typeof b.body==='string'?b.body.trim().slice(0,3000):'';
   if(!target||checkBlocked(db,id,target)||!status(db,id,target).matched)return J({error:'Переписка доступна после взаимного лайка'},403);
   if(!message)return J({error:'Введите сообщение'},400);
-  const sent=db.prepare("SELECT COUNT(*) AS n FROM messages WHERE sender=? AND created>=datetime('now','-1 minute')").get(id).n;
+  const sent=db.prepare('SELECT COUNT(*) AS n FROM messages WHERE sender=? AND created>=?').get(id,new Date(Date.now()-60000).toISOString()).n;
   if(sent>=20)return J({error:'Слишком много сообщений'},429);
   const mid=randomUUID();db.prepare('INSERT INTO messages(id,sender,recipient,body,created) VALUES(?,?,?,?,?)').run(mid,id,target,message,new Date().toISOString());return J({ok:true,id:mid});
  }
