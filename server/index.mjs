@@ -62,7 +62,7 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
    let response;
    if(path.pathname==='/api/telegram/webhook')response=await botMenu(request,{token:telegramBotToken,origin});
    else if(path.pathname.startsWith('/api/auth/'))response=await auth.route(request,ip);
-   else if(path.pathname==='/api/ai-match')response=await handleMatchAI(request,{sqlite,userId:identity?.id,apiKey:process.env.OPENAI_API_KEY,model:process.env.MATCHLOVE_AI_MODEL||'gpt-4.1-mini'});
+   else if(path.pathname==='/api/ai-match')response=await handleMatchAI(request,{sqlite,userId:identity?.id,apiKey:process.env.OPENAI_API_KEY,model:process.env.MATCHLOVE_AI_MODEL||'gpt-6-luna'});
    else if(['/api/ml-social','/api/ml-like','/api/ml-chat'].includes(path.pathname))response=await handleSocial(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/account'&&method==='DELETE'){
     if(!identity)response=new Response('{"error":"Войдите в аккаунт"}',{status:401,headers:{'Content-Type':'application/json'}});
