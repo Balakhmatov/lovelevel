@@ -5,7 +5,7 @@ const html=fs.readFileSync('public/index.html','utf8').replace('/* APP_CSS */',f
 code='const DEMO_PORTRAITS='+JSON.stringify(fs.readFileSync('assets/demo-portraits.jpg').toString('base64'))+';\n'+code;
 const fonts=Object.fromEntries(['inter-latin-v1.woff2','inter-cyrillic-v1.woff2'].map(name=>[name,fs.readFileSync('assets/fonts/'+name).toString('base64')]));
 code='const FONT_ASSETS='+JSON.stringify(fonts)+';\n'+code;
-code='const MATCHLOVE_ICON='+JSON.stringify(fs.readFileSync('public/matchlove-mark.svg','utf8'))+';
-'+code;\ncode='const HTML='+JSON.stringify(html)+';\n'+code;
+code='const MATCHLOVE_ICON='+JSON.stringify(fs.readFileSync('public/matchlove-mark.svg','utf8'))+';\n'+code;
+code='const HTML='+JSON.stringify(html)+';\n'+code;
 fs.writeFileSync('dist/server/index.js',code);fs.cpSync('drizzle','dist/drizzle',{recursive:true});
 console.log('Built standalone MatchLove application, embedded UI and database migrations.');
