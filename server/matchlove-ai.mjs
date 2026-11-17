@@ -95,13 +95,13 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model}){
   if(!mine)return json({results:[],saved:false});
   const myself=JSON.parse(mine.parsed);
   // Do not limit to "most recent 200" candidates: all eligible users are evaluated and sorted.
-  const rows=sqlite.prepare("SELECT m.user,m.parsed,p.name,p.city,p.birthdate,p.gender FROM matchlove_profiles m JOIN profiles p ON p.id=m.user WHERE m.user<>? AND p.paused=0 AND NOT EXISTS(SELECT 1 FROM blocks WHERE (sender=? AND recipient=m.user) OR (recipient=? AND sender=m.user))").all(userId,userId,userId);
+  const rows=sqlite.prepare("SELECT m.user,m.parsed,p.name,p.city,p.birthdate,p.gender FROM matchlove_profiles m LEFT JOIN profiles p ON p.id=m.user WHERE m.user<>? AND COALESCE(p.paused,0)=0 AND NOT EXISTS(SELECT 1 FROM blocks WHERE (sender=? AND recipient=m.user) OR (recipient=? AND sender=m.user))").all(userId,userId,userId);
   const results=[];
   for(const r of rows){
    let parsed;try{parsed=JSON.parse(r.parsed)}catch{continue}
    const detail=rankMatch(myself,parsed);if(!detail)continue;
-   let age=null;try{const birth=new Date(r.birthdate);age=new Date().getUTCFullYear()-birth.getUTCFullYear();}catch{}
-   results.push({id:r.user,name:r.name,city:r.city,age,score:detail.score,confidence:detail.confidence,mutual:detail.mutual,location:detail.location,explanation:detail.explanation});
+   let age=null;if(r.birthdate){const birth=new Date(r.birthdate);if(Number.isFinite(birth.getTime())){age=new Date().getUTCFullYear()-birth.getUTCFullYear();}}
+   results.push({id:r.user,name:r.name||'Участник '+String(r.user).slice(0,4),city:r.city||parsed.self.location||'',age:age||parsed.self.age_min,score:detail.score,confidence:detail.confidence,mutual:detail.mutual,location:detail.location,explanation:detail.explanation});
   }
   results.sort((a,b)=>b.score-a.score||b.confidence-a.confidence||a.name.localeCompare(b.name));
   return json({saved:true,results:results.slice(0,PUBLIC_LIMIT),total:results.length,source:mine.source});
