@@ -105,7 +105,7 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model}){
  if(request.method==='POST'){
   if(request.headers.get('origin')!==new URL(request.url).origin)return json({error:'Недопустимый источник запроса'},403);
   const body=await request.json().catch(()=>({}));const source=typeof body.text==='string'?body.text.slice(0,4000):'';
-  if(source.trim().length<15)return json({error:'Напиши о себе или о том, кого ищешь (не менее 15 символов)'},400);
+  if(source.trim().length<100)return json({error:'Напиши о себе или о том, кого ищешь (не менее 100 символов)'},400);
   if(!body.confirmAdult)return json({error:'Доступно только совершеннолетним'},400);
   try{
    const existing=sqlite.prepare('SELECT source,parsed FROM matchlove_profiles WHERE user=?').get(userId);
