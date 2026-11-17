@@ -9,7 +9,7 @@ import {diskBucket,openDatabase} from '../server/storage.mjs';
 import {createAccount} from '../server/manage.mjs';
 const origin='http://127.0.0.1:3118';let directory,instance,base,aliceCookie,bobCookie,aliceId,bobId;
 async function call(path,{method='GET',body,cookie,headers={}}={}){const h={Origin:origin,...headers};if(cookie)h.Cookie=cookie;if(body)h['Content-Type']='application/json';return fetch(base+path,{method,headers:h,body:body?JSON.stringify(body):undefined});}
-const account=(email,password='test-password-12345')=>({email,password,adult:true,terms:true,invite:'test-invitation'});
+const account=(email,password='test-password-12345')=>({email,password,gender:'female',adult:true,terms:true,invite:'test-invitation'});
 async function register(email){const r=await call('/api/auth/register',{method:'POST',body:account(email)});assert.equal(r.status,201);return r.headers.get('set-cookie').split(';')[0];}
 async function makeProfile(cookie,name){const r=await call('/api/profile',{method:'POST',cookie,body:{name,birthdate:'1995-03-20',city:'Москва',gender:'woman',seeking:'all',intent:'Знакомства и общение',bio:'Достаточно длинное описание для проверки сохранения анкеты после перезапуска.',interests:['Кофе','Книги','Кино'],adult:true,terms:true}});assert.equal(r.status,200);return (await(await call('/api/me',{cookie})).json()).id;}
 before(async()=>{directory=await mkdtemp(join(tmpdir(),'lovelevel-vps-'));instance=createServer({origin,dataDir:directory,secureCookies:false,registration:true,inviteCode:'test-invitation',adminIds:'admin'});instance.server.listen(0,'127.0.0.1');await once(instance.server,'listening');base='http://127.0.0.1:'+instance.server.address().port;});
@@ -30,3 +30,11 @@ test('Logout revokes the server-side session',async()=>{assert.equal((await call
 test('Account deletion also removes credentials and invalidates cookie',async()=>{assert.equal((await call('/api/account',{method:'DELETE',cookie:aliceCookie})).status,200);assert.equal(instance.sqlite.prepare('SELECT 1 FROM auth_accounts WHERE id=?').get(aliceId),undefined);assert.equal((await call('/api/me',{cookie:aliceCookie})).status,401);});
 test('Applied migration changes fail closed instead of silently modifying schema',async()=>{const path=join(directory,'tamper.sqlite');let db=openDatabase(path);db.sqlite.prepare('UPDATE _lovelevel_migrations SET hash=? WHERE name=?').run('tampered','0000_eminent_sebastian_shaw.sql');db.sqlite.close();assert.throws(()=>openDatabase(path),/Applied migration changed/);});
 test('Operator can bind a new login to an imported profile ID',async()=>{const imported='legacy-imported-profile';instance.sqlite.prepare('INSERT INTO profiles(id,name,birthdate,city,gender,seeking,bio,intent,interests,created) VALUES(?,?,?,?,?,?,?,?,?,?)').run(imported,'Импорт','1990-01-01','Москва','man','all','','Знакомства и общение','[]',new Date().toISOString());const id=await createAccount(instance.sqlite,{email:'import@example.com',password:'import-password-12345',profileId:imported});assert.equal(id,imported);const login=await call('/api/auth/login',{method:'POST',body:{email:'import@example.com',password:'import-password-12345'}});assert.equal(login.status,200);const c=login.headers.get('set-cookie').split(';')[0];const me=await(await call('/api/me',{cookie:c})).json();assert.equal(me.profile.name,'Импорт');});
+
+test('Registration requires a gender and persists the selected value',async()=>{
+ const missing={...account('gender-missing@example.com')};delete missing.gender;
+ assert.equal((await call('/api/auth/register',{method:'POST',body:missing})).status,400);
+ assert.equal((await call('/api/auth/register',{method:'POST',body:{...missing,gender:'invalid'}})).status,400);
+ const r=await call('/api/auth/register',{method:'POST',body:{...missing,gender:'male'}});assert.equal(r.status,201);
+ assert.equal(instance.sqlite.prepare('SELECT gender FROM auth_accounts WHERE email=?').get(missing.email).gender,'male');
+});

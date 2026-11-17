@@ -76,10 +76,11 @@ export function createTelegramAuth(sqlite,{current,newSession,issueSession,consu
     if(!registration)throw Object.assign(new Error('Регистрация пока закрыта. Сначала войдите по email и привяжите Telegram.'),{status:403});
     if(b.adult!==true||b.terms!==true)throw Object.assign(new Error('Подтвердите возраст 18+ и правила.'),{status:400});
     if(inviteCode&&(typeof b.invite!=='string'||!timingSafeEqual(Buffer.from(digest(b.invite)),Buffer.from(digest(inviteCode)))))throw Object.assign(new Error('Нужен код приглашения'),{status:403});
+    if(!['male','female'].includes(b.gender))throw Object.assign(new Error('Выбери пол'),{status:400});
     target=randomUUID();
     // Internal provider key: not an email and rejected by password-login validation.
     // Telegram does not supply email; no email/username-based account merging occurs.
-    sqlite.prepare('INSERT INTO auth_accounts(id,email,password_hash,created) VALUES(?,?,?,?)').run(target,'telegram:'+proof.id,'!telegram-only',now());
+    sqlite.prepare('INSERT INTO auth_accounts(id,email,password_hash,created,gender) VALUES(?,?,?,?,?)').run(target,'telegram:'+proof.id,'!telegram-only',now(),b.gender);
    }
    if(!linked)sqlite.prepare('INSERT INTO auth_telegram_links(telegram_id,account,username,created) VALUES(?,?,?,?)').run(proof.id,target,proof.username,now());
    else sqlite.prepare('UPDATE auth_telegram_links SET username=? WHERE telegram_id=?').run(proof.username,proof.id);

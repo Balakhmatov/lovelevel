@@ -100,6 +100,11 @@ async function interpretPairsWithOpenAI(me,candidates,{apiKey,model}){
  }finally{clearTimeout(timeout)}
 }
 
+export function applyGenderDefaults(parsed,gender){
+ if(!['male','female'].includes(gender))return parsed;
+ return {...parsed,self:{...parsed.self,gender},wanted:{...parsed.wanted,gender:parsed.wanted?.gender|| (gender==='male'?'female':'male')}};
+}
+
 export async function handleMatchAI(request,{sqlite,userId,apiKey,model}){
  if(!userId)return json({error:'Необходимо войти в аккаунт'},401);
  if(request.method==='POST'){
@@ -110,7 +115,9 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model}){
   try{
    const existing=sqlite.prepare('SELECT source,parsed FROM matchlove_profiles WHERE user=?').get(userId);
    let parsed=existing?.source===source?JSON.parse(existing.parsed):await parseWithOpenAI(source,{apiKey,model});
-   const needsTextUpdate=existing?.source!==source;
+   const account=sqlite.prepare('SELECT gender FROM auth_accounts WHERE id=?').get(userId);
+   parsed=applyGenderDefaults(parsed,account?.gender);
+   const needsTextUpdate=existing?.source!==source||existing?.parsed!==JSON.stringify(parsed);
    const previousVectors=sqlite.prepare('SELECT source_updated,model FROM matchlove_vectors WHERE user=?').get(userId);
    const currentUpdated=sqlite.prepare('SELECT updated FROM matchlove_profiles WHERE user=?').get(userId)?.updated;
    const embeddingModel=process.env.MATCHLOVE_EMBEDDING_MODEL||EMBEDDING_MODEL;
@@ -137,16 +144,16 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model}){
  if(request.method==='GET'){
   const mine=sqlite.prepare('SELECT source,parsed,updated FROM matchlove_profiles WHERE user=?').get(userId);
   if(!mine)return json({results:[],saved:false});
-  const myself=JSON.parse(mine.parsed);
+  const myself=applyGenderDefaults(JSON.parse(mine.parsed),sqlite.prepare('SELECT gender FROM auth_accounts WHERE id=?').get(userId)?.gender);
   // Do not limit to "most recent 200" candidates: all eligible users are evaluated and sorted.
-  const rows=sqlite.prepare("SELECT m.user,m.parsed,m.updated,v.source_updated AS vector_updated,v.model AS vector_model,v.self_vector,v.wanted_vector,p.name,p.city,p.birthdate,p.gender FROM matchlove_profiles m LEFT JOIN matchlove_vectors v ON v.user=m.user LEFT JOIN profiles p ON p.id=m.user WHERE m.user<>? AND COALESCE(p.paused,0)=0 AND NOT EXISTS(SELECT 1 FROM blocks WHERE (sender=? AND recipient=m.user) OR (recipient=? AND sender=m.user))").all(userId,userId,userId);
+  const rows=sqlite.prepare("SELECT m.user,m.parsed,m.updated,v.source_updated AS vector_updated,v.model AS vector_model,v.self_vector,v.wanted_vector,p.name,p.city,p.birthdate,p.gender,a.gender AS account_gender FROM matchlove_profiles m LEFT JOIN auth_accounts a ON a.id=m.user LEFT JOIN matchlove_vectors v ON v.user=m.user LEFT JOIN profiles p ON p.id=m.user WHERE m.user<>? AND COALESCE(p.paused,0)=0 AND NOT EXISTS(SELECT 1 FROM blocks WHERE (sender=? AND recipient=m.user) OR (recipient=? AND sender=m.user))").all(userId,userId,userId);
   const results=[],toScore=[];
   const myVectorRow=sqlite.prepare('SELECT * FROM matchlove_vectors WHERE user=?').get(userId);
   const embModel=process.env.MATCHLOVE_EMBEDDING_MODEL||EMBEDDING_MODEL;
   const decode=x=>{if(!x)return null;try{const v=JSON.parse(x);return Array.isArray(v)?v:null}catch{return null}};
   const myVectors=myVectorRow&&myVectorRow.source_updated===mine.updated&&myVectorRow.model===embModel?{self:decode(myVectorRow.self_vector),wanted:decode(myVectorRow.wanted_vector)}:null;
   for(const r of rows){
-   let parsed;try{parsed=JSON.parse(r.parsed)}catch{continue}
+   let parsed;try{parsed=applyGenderDefaults(JSON.parse(r.parsed),r.account_gender)}catch{continue}
    const detail=rankMatch(myself,parsed);if(!detail)continue;
    const candidateVectors=myVectors&&r.vector_updated===r.updated&&r.vector_model===embModel?{self:decode(r.self_vector),wanted:decode(r.wanted_vector)}:null;
    const vectorRelevance=bidirectionalVectors(myVectors,candidateVectors);
