@@ -1,6 +1,6 @@
 import {cosine,tagKey} from './matchlove-embeddings.mjs';
 import {locationMatch} from './matching-location.mjs';
-export const SCORING_VERSION='tags-v3-habits-soft-age';
+export const SCORING_VERSION='tags-v4-confirmed-activities';
 // 1 percentage point is reserved for a confirmed gender fit; 10 points are reserved for location, and the remaining 89 follow these proportions.
 // Missing facts never redistribute their unused category budget to the known categories.
 export const WEIGHTS={age:28,goal:24,interests:20,appearance:10,sexual_preferences:7,personality:4,habits:4,profession:3};
@@ -34,10 +34,12 @@ export function scoreEvidence(a,b,evidence=[],vectors=new Map()){
  const agreementFor=(category,direction,label,actual)=>{
   let best=0;
   for(const fact of actual){
-   let value=similarity(category,label,fact);
+   const similarityValue=similarity(category,label,fact);
+   // Broad thematic proximity is retrieval evidence, not a confirmed shared activity.
+   let value=norm(label)===norm(fact)?1:0;
    const reviews=evidence.filter(e=>e?.direction===direction&&e.category===category&&norm(e.wantedEvidence)===norm(label)&&norm(e.candidateEvidence)===norm(fact)&&Number.isFinite(e.agreement)&&e.agreement>=0&&e.agreement<=1);
    if(negative(label)!==negative(fact))continue;
-   if(reviews.length){const review=Math.min(...reviews.map(e=>e.agreement));value=vectors.has(tagKey(category,label))&&vectors.has(tagKey(category,fact))?Math.min(value,review):review;}
+   if(reviews.length){const review=Math.min(...reviews.map(e=>e.agreement));value=review>=.8?(vectors.has(tagKey(category,label))&&vectors.has(tagKey(category,fact))?Math.min(similarityValue,review):review):0;}
    const rejected=evidence.some(e=>e?.direction===direction&&e.category===category&&norm(e.wantedEvidence)===norm(label)&&e.agreement===0&&!e.candidateEvidence);
    if(!rejected)best=Math.max(best,value);
   }

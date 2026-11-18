@@ -10,7 +10,7 @@ export function locationMatch(a,b){
  if(cityKey(cityA)&&cityKey(cityB)&&cityKey(cityA)===cityKey(cityB))return {units:1000,distanceKm:null,label:'Один город: '+String(cityA).trim(),location:'same'};
  return {units:0,distanceKm:null,label:'',location:cityKey(cityA)&&cityKey(cityB)?'different':'unknown'};
 }
-export function ownLocation(db,user){const row=db.prepare('SELECT city,latitude,longitude FROM matchlove_locations WHERE user=?').get(user);const profile=db.prepare('SELECT parsed FROM matchlove_profiles WHERE user=?').get(user);let parsed;try{parsed=JSON.parse(profile?.parsed||'{}')}catch{parsed={}}return {...(row||{}),city:row?.city||parsed.self?.location||db.prepare('SELECT city FROM profiles WHERE id=?').get(user)?.city||''};}
+export function ownLocation(db,user){const row=db.prepare('SELECT city,latitude,longitude FROM matchlove_locations WHERE user=?').get(user);const profile=db.prepare('SELECT parsed FROM matchlove_profiles WHERE user=?').get(user);let parsed;try{parsed=JSON.parse(profile?.parsed||'{}')}catch{parsed={}}return {...(row||{}),city:parsed.self?.location||row?.city||db.prepare('SELECT city FROM profiles WHERE id=?').get(user)?.city||''};}
 export async function handleLocation(request,{sqlite:db,userId}){
  if(!userId)return json({error:'Войди в аккаунт'},401);
  const read=()=>{const row=ownLocation(db,userId);return json({city:row.city,enabled:coordinates(row)});};

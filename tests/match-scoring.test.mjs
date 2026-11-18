@@ -29,7 +29,8 @@ test('Per-tag embeddings award calibrated points and semantic conflict vetoes th
  const {tagKey}=await import('../server/matchlove-embeddings.mjs');
  const [a,b]=pair({interests:['путешествия']},{interests:['поездки за границу']});
  const vectors=new Map([[tagKey('interests','путешествия'),[1,0]],[tagKey('interests','поездки за границу'),[.8,.6]]]);
- const r=scoreEvidence(a,b,[],vectors);assert.equal(r.score,13.71);assert.equal(sum(r),r.score);
+ assert.equal(scoreEvidence(a,b,[],vectors).score,1);
+ const r=scoreEvidence(a,b,[{category:'interests',direction:'viewer',wantedEvidence:'путешествия',candidateEvidence:'поездки за границу',agreement:1}],vectors);assert.equal(r.score,13.71);assert.equal(sum(r),r.score);
  assert.equal(scoreEvidence(a,b,[{category:'interests',direction:'viewer',wantedEvidence:'путешествия',candidateEvidence:'поездки за границу',agreement:0}],vectors).score,1);
 });
 test('Habits have a fixed separate budget and opposite statements do not earn embedding points',async()=>{
@@ -49,4 +50,13 @@ test('Implicit nearby age is soft while an explicit desired age takes precedence
 test('An erroneous affirmative semantic review cannot override opposite habits',()=>{
  const [a,b]=pair({habits:['люблю пиво']},{habits:['не люблю пиво']});
  assert.equal(scoreEvidence(a,b,[{category:'habits',direction:'viewer',wantedEvidence:'люблю пиво',candidateEvidence:'не люблю пиво',agreement:1}]).score,1);
+});
+
+test('Related leisure interests do not invent shared television or dancing activities',async()=>{
+ const {tagKey}=await import('../server/matchlove-embeddings.mjs');
+ const [a,b]=pair({interests:['смотреть телевизор','танцы']},{interests:['отдыхать дома','музыка']});
+ const vectors=new Map(['смотреть телевизор','танцы','отдыхать дома','музыка'].map(t=>[tagKey('interests',t),[1,0]]));
+ assert.equal(scoreEvidence(a,b,[],vectors).score,1);
+ const e={category:'interests',direction:'viewer',wantedEvidence:'танцы',candidateEvidence:'музыка',agreement:.6};
+ assert.equal(scoreEvidence(a,b,[e],vectors).score,1);
 });
