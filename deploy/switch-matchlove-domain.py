@@ -8,10 +8,25 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 
 DOMAINS=('matchlove.cityai.site','lovelevel.cityai.site','cityai.site')
 def run(*args):
     return subprocess.run(args,check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+def verify_https(domain,path='/',expected='200|',attempts=12):
+    last='No response'
+    for attempt in range(attempts):
+        try:
+            result=run('curl','--noproxy','*','--silent','--show-error','--connect-timeout','3','--max-time','8','--resolve',domain+':443:127.0.0.1','-o','/dev/null','-w','%{http_code}|%{redirect_url}','https://'+domain+path)
+            if result.stdout==expected:
+                return
+            last='Unexpected response: '+result.stdout[:250]
+        except subprocess.CalledProcessError as error:
+            last=(error.stderr or str(error)).strip()[-1600:]
+        if attempt+1<attempts:
+            time.sleep(1)
+    raise RuntimeError('HTTPS check failed for '+domain+path+' after '+str(attempts)+' attempts: '+last)
+
 def names(path):
     text=re.sub(r'#[^\n]*','',path.read_text())
     return {name for row in re.findall(r'\bserver_name\s+([^;]+);',text) for name in row.split()}
@@ -72,17 +87,14 @@ def main():
         run('systemctl','restart','lovelevel')
         run('curl','--fail','--silent','--retry','10','--retry-connrefused','--retry-delay','1','--max-time','3','http://127.0.0.1:3118/health')
         run('systemctl','reload','nginx')
-        for domain in DOMAINS:
-            result=run('curl','--silent','--show-error','--max-time','15','--resolve',domain+':443:127.0.0.1','-o','/dev/null','-w','%{http_code}|%{redirect_url}','https://'+domain+'/')
-            if domain==DOMAINS[0]:
-                if result.stdout!='200|':
-                    raise RuntimeError('Canonical site health failed')
-            elif result.stdout!='302|https://matchlove.cityai.site/':
-                raise RuntimeError('Redirect check failed for '+domain)
-        result=run('curl','--silent','--show-error','--max-time','15','--resolve','cityai.site:443:127.0.0.1','-o','/dev/null','-w','%{http_code}|%{redirect_url}','https://cityai.site/app')
-        if result.stdout!='302|https://matchlove.cityai.site/':
-            raise RuntimeError('/app redirect check failed')
+        # Graceful reload can return while old workers still serve their previous TLS vhosts.
+        # Retry with normal certificate/hostname verification instead of immediately rolling back.
+        verify_https(DOMAINS[0])
+        for domain in DOMAINS[1:]:
+            verify_https(domain,expected='302|https://matchlove.cityai.site/')
+        verify_https('cityai.site','/app',expected='302|https://matchlove.cityai.site/')
     except BaseException:
+        print('Verification failed; restoring previous Nginx and application settings',file=sys.stderr)
         for name,path in files.items():
             shutil.copy2(backup/name,path)
         link.unlink(missing_ok=True)
