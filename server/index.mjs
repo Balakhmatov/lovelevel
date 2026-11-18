@@ -80,7 +80,7 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
    else if(path.pathname==='/api/tag-suggestions')response=await handleTagSuggestions(request,{sqlite});
    else if(path.pathname==='/api/account-gender')response=await handleAccountGender(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/ai-match')response=await handleMatchAI(request,{sqlite,userId:identity?.id,apiKey:process.env.OPENAI_API_KEY,model:process.env.MATCHLOVE_AI_MODEL||'gpt-6-luna'});
-   else if(['/api/ml-social','/api/ml-like','/api/ml-chat'].includes(path.pathname))response=await handleSocial(request,{sqlite,userId:identity?.id});
+   else if(['/api/ml-social','/api/ml-like','/api/ml-chat','/api/ml-presence'].includes(path.pathname))response=await handleSocial(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/account'&&method==='DELETE'){
     if(!identity)response=new Response('{"error":"Войдите в аккаунт"}',{status:401,headers:{'Content-Type':'application/json'}});
     else{response=await app.fetch(request,env);if(response.ok){sqlite.prepare('DELETE FROM auth_accounts WHERE id=?').run(identity.id);response.headers.set('Set-Cookie',`${auth.cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureCookies?'; Secure':''}`);}}

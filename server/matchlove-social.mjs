@@ -1,3 +1,4 @@
+import {touchPresence,readPresence} from './chat-presence.mjs';
 import {randomUUID} from 'node:crypto';
 const J=(v,status=200)=>new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
 const name=(r)=>r.name||'Участник '+r.id.slice(0,6);
@@ -8,6 +9,13 @@ export async function handleSocial(request,{sqlite:db,userId:id}){
  if(!id)return J({error:'Войди в аккаунт'},401);
  const url=new URL(request.url),path=url.pathname,method=request.method;
  if(method!=='GET'&&request.headers.get('origin')!==url.origin)return J({error:'Недопустимый источник'},403);
+ if(path==='/api/ml-presence'&&method==='POST'){
+  const body=await request.json().catch(()=>null);
+  if(!body||typeof body.client!=='string'||! /^[a-zA-Z0-9_-]{1,64}$/.test(body.client)||('active' in body&&typeof body.active!=='boolean')||('typing' in body&&typeof body.typing!=='boolean'))return J({error:'Некорректный статус'},400);
+  const target=typeof body.target==='string'?body.target:'';
+  if('typing' in body&&(!target||checkBlocked(db,id,target)||!status(db,id,target).matched))return J({error:'Переписка недоступна'},403);
+  touchPresence(db,id,{client:body.client,active:body.active!==false,target,typing:body.typing});return J({ok:true});
+ }
  if(path==='/api/ml-social'&&method==='GET'){
   const rows=db.prepare("SELECT m.user AS id,COALESCE(NULLIF(json_extract(m.parsed,'$.self.name'),''),p.name,'') AS name,COALESCE(NULLIF(json_extract(m.parsed,'$.self.location'),''),p.city,'') AS city,CAST(json_extract(m.parsed,'$.self.age_min') AS INTEGER) AS age_min, (SELECT 1 FROM likes my WHERE my.sender=? AND my.recipient=m.user) AS liked, (SELECT 1 FROM likes theirs WHERE theirs.sender=m.user AND theirs.recipient=?) AS liked_me FROM matchlove_profiles m LEFT JOIN profiles p ON p.id=m.user WHERE m.user<>? AND NOT EXISTS(SELECT 1 FROM blocks WHERE (sender=? AND recipient=m.user) OR (sender=m.user AND recipient=?)) AND (EXISTS(SELECT 1 FROM likes l WHERE l.sender=m.user AND l.recipient=?) OR EXISTS(SELECT 1 FROM likes l WHERE l.sender=? AND l.recipient=m.user)) ORDER BY m.updated DESC").all(id,id,id,id,id,id,id);
   const incoming=[],matches=[],outgoing=[];
@@ -25,7 +33,10 @@ export async function handleSocial(request,{sqlite:db,userId:id}){
  if(path==='/api/ml-chat'&&method==='GET'){
   const target=url.searchParams.get('target')||'';if(!target||checkBlocked(db,id,target)||!status(db,id,target).matched)return J({error:'Переписка доступна после взаимного лайка'},403);
   const messages=db.prepare('SELECT id,sender,recipient,body,created FROM messages WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?) ORDER BY created DESC,id DESC LIMIT 150').all(id,target,target,id).reverse();
-  return J({messages});
+  const row=db.prepare("SELECT m.user AS id,COALESCE(NULLIF(json_extract(m.parsed,'$.self.name'),''),p.name,'') AS name FROM matchlove_profiles m LEFT JOIN profiles p ON p.id=m.user WHERE m.user=?").get(target);
+  const hasPhoto=!!db.prepare('SELECT 1 FROM matchlove_photos WHERE user=? AND is_main=1').get(target);
+  const peer={id:target,name:row?name(row):'Участник '+target.slice(0,6),photo:hasPhoto?'/api/profile-photo?user='+encodeURIComponent(target):null,...readPresence(db,target,id)};
+  return J({messages,peer});
  }
  if(path==='/api/ml-chat'&&method==='POST'){
   const b=await request.json().catch(()=>({}));const target=typeof b.target==='string'?b.target.slice(0,100):'',message=typeof b.body==='string'?b.body.trim().slice(0,3000):'';
@@ -33,6 +44,7 @@ export async function handleSocial(request,{sqlite:db,userId:id}){
   if(!message)return J({error:'Введите сообщение'},400);
   const sent=db.prepare('SELECT COUNT(*) AS n FROM messages WHERE sender=? AND created>=?').get(id,new Date(Date.now()-60000).toISOString()).n;
   if(sent>=20)return J({error:'Слишком много сообщений'},429);
+  if(typeof b.client==='string'&&/^[a-zA-Z0-9_-]{1,64}$/.test(b.client))touchPresence(db,id,{client:b.client,target,typing:false});
   const mid=randomUUID();db.prepare('INSERT INTO messages(id,sender,recipient,body,created) VALUES(?,?,?,?,?)').run(mid,id,target,message,new Date().toISOString());return J({ok:true,id:mid});
  }
  return J({error:'Не найдено'},404);
