@@ -11,3 +11,11 @@ Each individual phrase is embedded with its category using text-embedding-3-smal
 Habits are separate from hobbies. Parsing preserves negation and does not infer drinking frequency from liking beer. Existing saved descriptions are reparsed on the next submission if they predate habits extraction.
 
 An explicit desired age range remains a filter. Without a range, known ages differing by up to 5 years receive the age budget; it decreases linearly to zero at 15 years, without excluding the candidate. Missing ages earn no age points. Location uses consented coordinates or an explicitly known city; it is not inferred from IP.
+
+## Editable profiles
+
+`GET /api/ml-profile` returns the signed-in user's editable profile. `?user=ID` returns a visible candidate's self/wanted sections and photo gallery, with no source search text or private edit metadata. Blocked and paused accounts cannot be viewed. Gallery photos are served through `/api/profile-photo?user=ID&id=PHOTO_ID` with the same authorization checks as the main photo, and the photo must belong to the named account.
+
+`PATCH /api/ml-profile` accepts only self/wanted field changes. Each explicitly changed field (including an empty array or string) is protected in `matchlove_profile_overrides`. AI parsing reapplies these overrides before persisting a new profile, so another search cannot restore a deleted hobby or overwrite a corrected fact. An entire manually corrected category is protected; AI updates the remaining categories. AI-generated preference clauses for a protected category are removed to prevent old clauses from influencing scoring. Manual edits invalidate embeddings and pair caches and update autocomplete usage. Profile biography text is editable display copy; matching uses the structured fields shown below it.
+
+A profile can be filled in without AI. An empty search input uses the saved structured profile directly; a new text description requires at least 100 characters. AI parses two short bios as well as categorized facts on the next text search. Both viewing and editing have self/wanted tabs; manual edits survive tab switching and gallery changes before saving.

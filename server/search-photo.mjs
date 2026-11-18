@@ -23,7 +23,7 @@ export async function handleSearchPhoto(request,{sqlite,userId}){
   if(path==='/api/profile-photo'){
    const target=url.searchParams.get('user');
    if(target!==userId&&(!sqlite.prepare('SELECT 1 FROM matchlove_profiles WHERE user=?').get(target)||sqlite.prepare('SELECT 1 FROM profiles WHERE id=? AND paused=1').get(target)||sqlite.prepare('SELECT 1 FROM blocks WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)').get(userId,target,target,userId)))return json({error:'Фото недоступно'},404);
-   row=sqlite.prepare('SELECT mime,data FROM matchlove_photos WHERE user=? AND is_main=1').get(target);
+   row=url.searchParams.has('id')?sqlite.prepare('SELECT mime,data FROM matchlove_photos WHERE user=? AND id=?').get(target,url.searchParams.get('id')):sqlite.prepare('SELECT mime,data FROM matchlove_photos WHERE user=? AND is_main=1').get(target);
   }else row=url.searchParams.has('id')?sqlite.prepare('SELECT mime,data FROM matchlove_photos WHERE user=? AND id=?').get(userId,url.searchParams.get('id')):sqlite.prepare('SELECT mime,data FROM matchlove_photos WHERE user=? AND is_main=1').get(userId);
   if(!row)return json({error:'Фото не загружено'},404);
   return new Response(row.data,{headers:{'Content-Type':row.mime,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
