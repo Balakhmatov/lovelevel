@@ -27,6 +27,6 @@ test('Location requires login and explicit consent, stores coarse coordinates an
  const row=app.sqlite.prepare('SELECT * FROM matchlove_locations').get();assert.equal(row.latitude,55.76);assert.equal(row.longitude,37.62);
  assert.equal((await call('/api/location',{cookie,method:'PATCH',body:{city:'Москва'}})).status,200);
  meta=await(await call('/api/location',{cookie,method:'DELETE'})).json();assert.equal(meta.enabled,false);assert.equal(meta.city,'Москва');assert.equal(app.sqlite.prepare('SELECT latitude FROM matchlove_locations').get().latitude,null);
- const html=await(await fetch(base+'/')).text();assert.ok(html.includes('Определить местоположение'));const policy=(await fetch(base+'/')).headers.get('Permissions-Policy');assert.ok(policy.includes('geolocation=(self)'));
+ const html=await(await fetch(base+'/')).text();assert.ok(html.includes('Включить геолокацию'));const policy=(await fetch(base+'/')).headers.get('Permissions-Policy');assert.ok(policy.includes('geolocation=(self)'));
  }finally{app.server.closeAllConnections();await new Promise(r=>app.server.close(r));await rm(dir,{recursive:true,force:true});}
 });
