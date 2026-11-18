@@ -9,7 +9,8 @@ import fs from 'node:fs';
 import {webhookSecret} from '/opt/lovelevel/current/server/bot-menu.mjs';
 const config=fs.readFileSync('/etc/lovelevel/telegram.env','utf8');
 const token=config.split('\n').find(line=>line.startsWith('TELEGRAM_BOT_TOKEN='))?.slice('TELEGRAM_BOT_TOKEN='.length);
-const origin='https://lovelevel.cityai.site';
+const origin=fs.readFileSync('/etc/lovelevel/app.env','utf8').split('\n').find(line=>line.startsWith('PUBLIC_ORIGIN='))?.slice('PUBLIC_ORIGIN='.length).trim();
+if(!origin||new URL(origin).origin!==origin||!origin.startsWith('https://'))throw Error('Invalid PUBLIC_ORIGIN');
 async function call(method,body){const r=await fetch('https://api.telegram.org/bot'+token+'/'+method,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(15000)});const data=await r.json();if(!data.ok)throw Error(method);return data.result;}
 try{
  if(!token)throw Error('missing token');

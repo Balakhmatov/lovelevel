@@ -21,7 +21,8 @@ import fs from 'node:fs';
 const text=fs.readFileSync(process.argv[2],'utf8');
 const token=text.split('\n').find(s=>s.startsWith('TELEGRAM_BOT_TOKEN=')).slice('TELEGRAM_BOT_TOKEN='.length);
 try{const response=await fetch('https://api.telegram.org/bot'+token+'/getMe',{signal:AbortSignal.timeout(15000)});const data=await response.json();if(!data.ok||String(data.result?.username).toLowerCase()!=='lovelevel_app_bot'){console.error('Token was not confirmed for @lovelevel_app_bot. Check BotFather.');process.exit(1);}
-const menu=await fetch('https://api.telegram.org/bot'+token+'/setChatMenuButton',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({menu_button:{type:'web_app',text:'Открыть LoveLevel',web_app:{url:'https://lovelevel.cityai.site/miniapp'}}}),signal:AbortSignal.timeout(15000)});if(!(await menu.json()).ok){console.error('Could not configure the Mini App menu button.');process.exit(1);}}catch{console.error('Could not verify bot. Check token and VPS access to api.telegram.org.');process.exit(1);}
+const origin=fs.readFileSync('/etc/lovelevel/app.env','utf8').split('\n').find(line=>line.startsWith('PUBLIC_ORIGIN='))?.slice('PUBLIC_ORIGIN='.length).trim();if(!origin||new URL(origin).origin!==origin||!origin.startsWith('https://')){console.error('Invalid PUBLIC_ORIGIN');process.exit(1);}
+const menu=await fetch('https://api.telegram.org/bot'+token+'/setChatMenuButton',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({menu_button:{type:'web_app',text:'Открыть LoveLevel',web_app:{url:origin+'/miniapp'}}}),signal:AbortSignal.timeout(15000)});if(!(await menu.json()).ok){console.error('Could not configure the Mini App menu button.');process.exit(1);}}catch{console.error('Could not verify bot. Check token and VPS access to api.telegram.org.');process.exit(1);}
 JS
 mv "$pending" /etc/lovelevel/telegram.env
 chown root:root /etc/lovelevel/telegram.env
