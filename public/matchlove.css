@@ -70,3 +70,5 @@ html{scrollbar-gutter:stable}@supports not (scrollbar-gutter:stable){html{overfl
 
 /* iOS Safari auto-zooms focused form controls below 16px and can retain that zoom after login. */
 .content,.wrap,.login,.stack,.stack>label{min-width:0}.login,.login .panel{width:100%}@media(max-width:740px){input:not([type=radio]):not([type=checkbox]):not([type=file]),textarea,select,.stack .field{font-size:16px}.stack .field{max-width:100%;min-width:0}.content{width:100%}}
+
+.match-contributions{display:flex;flex-wrap:wrap;gap:7px;margin-top:16px;padding-top:14px;border-top:1px solid #4f39454d}.match-contributions:empty{display:none}.match-contribution{display:inline-flex;align-items:baseline;flex-wrap:wrap;gap:5px;padding:7px 9px;border:1px solid #5d8c4e55;border-radius:10px;background:#a9f57d0c;font-size:12px;line-height:1.4;color:#e5e8df;max-width:100%;overflow-wrap:anywhere}.match-contribution b{color:var(--green);font-size:12px;white-space:nowrap}

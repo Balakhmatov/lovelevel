@@ -5,7 +5,7 @@ const p=(overrides={})=>({age_min:null,age_max:null,location:'',gender:'',goal:[
 test('one sided wishes match the other person self description',()=>{
  const man={self:p({age_min:30,age_max:30,gender:'мужчина',appearance:['голубые глаза','светлые волосы']}),wanted:p()};
  const woman={self:p({age_min:26,age_max:26,gender:'женщина'}),wanted:p({age_min:27,age_max:40,gender:'мужчина',appearance:['голубые глаза','светлые волосы']})};
- const result=rankMatch(man,woman);assert.ok(result);assert.equal(result.mutual,false);assert.ok(result.score>=80);
+ const result=rankMatch(man,woman);assert.ok(result);assert.equal(result.mutual,false);assert.equal(result.score,38.62);assert.equal(Math.round(result.matches.reduce((n,m)=>n+m.points,0)*100)/100,result.score);
 });
 test('explicit age bounds exclude ineligible candidate',()=>{
  const a={self:p({age_min:20,age_max:20}),wanted:p({age_min:25,age_max:35})};
@@ -20,7 +20,7 @@ test('declared desired gender excludes wrong gender',()=>{
 test('self-only descriptions get secondary similarity signal',()=>{
  const a={self:p({interests:['кофе','музыка']}),wanted:p()};
  const b={self:p({interests:['кофе','спорт']}),wanted:p()};
- const r=rankMatch(a,b);assert.ok(r);assert.ok(r.score>25);assert.equal(r.mutual,false);
+ const r=rankMatch(a,b);assert.ok(r);assert.equal(r.score,9.9);assert.equal(r.mutual,false);
 });
 test('location handled after main score',()=>{
  const a={self:p({location:'Москва',interests:['музыка']}),wanted:p()};
