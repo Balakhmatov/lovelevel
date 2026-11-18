@@ -12,6 +12,8 @@ import {inspectClip} from './media-probe.mjs';
 import {initMatchAI,handleMatchAI} from './matchlove-ai.mjs';
 import {handleSocial} from './matchlove-social.mjs';
 import {handleAccountGender} from './account-gender.mjs';
+import {handleLocation} from './matching-location.mjs';
+import {handleTagSuggestions} from './tag-suggestions.mjs';
 import {handleSearchPhoto,SEARCH_PHOTO_LIMIT} from './search-photo.mjs';
 import app from '../dist/server/index.js';
 
@@ -72,6 +74,8 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
    if(path.pathname==='/api/telegram/webhook')response=await botMenu(request,{token:telegramBotToken,origin});
    else if(path.pathname.startsWith('/api/auth/'))response=await auth.route(request,ip);
    else if(['/api/search-photo','/api/search-photo-info','/api/profile-photo'].includes(path.pathname))response=await handleSearchPhoto(request,{sqlite,userId:identity?.id});
+   else if(path.pathname==='/api/location')response=await handleLocation(request,{sqlite,userId:identity?.id});
+   else if(path.pathname==='/api/tag-suggestions')response=await handleTagSuggestions(request,{sqlite});
    else if(path.pathname==='/api/account-gender')response=await handleAccountGender(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/ai-match')response=await handleMatchAI(request,{sqlite,userId:identity?.id,apiKey:process.env.OPENAI_API_KEY,model:process.env.MATCHLOVE_AI_MODEL||'gpt-6-luna'});
    else if(['/api/ml-social','/api/ml-like','/api/ml-chat'].includes(path.pathname))response=await handleSocial(request,{sqlite,userId:identity?.id});

@@ -1,5 +1,6 @@
-export const SCORING_VERSION='evidence-v1';
-// 1 percentage point is reserved for a confirmed gender fit; the other 99 follow these proportions.
+import {locationMatch} from './matching-location.mjs';
+export const SCORING_VERSION='evidence-v2-location';
+// 1 percentage point is reserved for a confirmed gender fit; 10 points are reserved for location, and the remaining 89 follow these proportions.
 // Missing facts never redistribute their unused category budget to the known categories.
 export const WEIGHTS={age:28,goal:24,interests:20,appearance:10,sexual_preferences:7,personality:8,profession:3};
 export const SEMANTIC_FIELDS=Object.keys(WEIGHTS).filter(k=>k!=='age');
@@ -25,7 +26,7 @@ export function scoreEvidence(a,b,evidence=[]){
  if(directions.some(d=>genderFit(d.wanted,d.self)===false||ageFit(d.wanted,d.self)===false))return null;
  const raw=[];if(directions.some(d=>genderFit(d.wanted,d.self)===true))raw.push({category:'gender',label:'Подходящий пол',units:100});
  for(const [category,weight] of Object.entries(WEIGHTS)){
-  const budget=weight*99;
+  const budget=weight*89;
   if(category==='age'){
    const requested=directions.filter(d=>d.wanted.age_min!=null||d.wanted.age_max!=null);
    for(const d of requested)if(ageFit(d.wanted,d.self)===true){const min=d.wanted.age_min??18,max=d.wanted.age_max??100;raw.push({category,label:min===max?'Возраст '+min+' лет':'Возраст '+min+'–'+max+' лет',units:budget/requested.length});}continue;
@@ -43,11 +44,10 @@ export function scoreEvidence(a,b,evidence=[]){
    for(const label of mine){const agreement=other.reduce((best,x)=>Math.max(best,lexical(label,x)),0);if(agreement>0)raw.push({category,label:label.slice(0,100),units:budget/denominator*agreement});}
   }
  }
+ const proximity=locationMatch(a,b);if(proximity.units>0)raw.push({category:'location',label:proximity.label,units:proximity.units});
  const result=finish(raw);
  const knownDirections=directions.filter(d=>Object.keys(WEIGHTS).some(k=>k==='age'?(d.wanted.age_min!=null||d.wanted.age_max!=null):criteria(d.wanted,k).length));
- const geo=(x,y)=>x&&y?(lexical(x,y)>0?'same':'different'):null;
- const location=geo(a.wanted?.location,b.self?.location)||geo(b.wanted?.location,a.self?.location)||geo(a.self?.location,b.self?.location)||'unknown';
- return {...result,confidence:0,mutual:knownDirections.length===2,location,explanation:'',reasons:result.matches.map(m=>m.label)};
+ return {...result,distanceKm:proximity.distanceKm,confidence:0,mutual:knownDirections.length===2,location:proximity.location,explanation:'',reasons:result.matches.map(m=>m.label)};
 }
 export function rankMatch(a,b){return scoreEvidence(a,b);}
 export function semanticProfile(p){return {self:p.self,wanted:p.wanted,criteria:Object.fromEntries(SEMANTIC_FIELDS.map(k=>[k,criteria(p.wanted||{},k)]))};}

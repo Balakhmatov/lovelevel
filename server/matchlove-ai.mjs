@@ -1,3 +1,5 @@
+import {ownLocation} from './matching-location.mjs';
+import {updateTagUsage} from './tag-suggestions.mjs';
 import {rankMatch,scoreEvidence,semanticProfile,SCORING_VERSION,SEMANTIC_FIELDS} from './match-scoring.mjs';
 export {rankMatch} from './match-scoring.mjs';
 import {generateEmbeddings,bidirectionalVectors,EMBEDDING_MODEL} from './matchlove-embeddings.mjs';
@@ -97,29 +99,30 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model}){
    }else if(needsVectors&&embedded){
     sqlite.prepare('INSERT INTO matchlove_vectors(user,source_updated,model,self_vector,wanted_vector) VALUES(?,?,?,?,?) ON CONFLICT(user) DO UPDATE SET source_updated=excluded.source_updated,model=excluded.model,self_vector=excluded.self_vector,wanted_vector=excluded.wanted_vector').run(userId,currentUpdated,embeddingModel,embedded.self?JSON.stringify(embedded.self):null,embedded.wanted?JSON.stringify(embedded.wanted):null);
    }
+   updateTagUsage(sqlite,userId,parsed);
    return json({ok:true,profile:parsed});
   }catch(e){return json({error:e.message==='OpenAI API не настроен на сервере'?e.message:'Не удалось разобрать текст через OpenAI'},e.status||502)}
  }
  if(request.method==='GET'){
   const mine=sqlite.prepare('SELECT source,parsed,updated FROM matchlove_profiles WHERE user=?').get(userId);
   if(!mine)return json({results:[],saved:false});
-  const myself=applyGenderDefaults(JSON.parse(mine.parsed),sqlite.prepare('SELECT gender FROM auth_accounts WHERE id=?').get(userId)?.gender);
+  const myself={...applyGenderDefaults(JSON.parse(mine.parsed),sqlite.prepare('SELECT gender FROM auth_accounts WHERE id=?').get(userId)?.gender),matchingLocation:ownLocation(sqlite,userId)};
   // Do not limit to "most recent 200" candidates: all eligible users are evaluated and sorted.
-  const rows=sqlite.prepare("SELECT m.user,m.parsed,m.updated,v.source_updated AS vector_updated,v.model AS vector_model,v.self_vector,v.wanted_vector,p.name,p.city,p.birthdate,p.gender,a.gender AS account_gender FROM matchlove_profiles m LEFT JOIN auth_accounts a ON a.id=m.user LEFT JOIN matchlove_vectors v ON v.user=m.user LEFT JOIN profiles p ON p.id=m.user WHERE m.user<>? AND COALESCE(p.paused,0)=0 AND NOT EXISTS(SELECT 1 FROM blocks WHERE (sender=? AND recipient=m.user) OR (recipient=? AND sender=m.user))").all(userId,userId,userId);
+  const rows=sqlite.prepare("SELECT m.user,m.parsed,m.updated,v.source_updated AS vector_updated,v.model AS vector_model,v.self_vector,v.wanted_vector,p.name,p.city,p.birthdate,p.gender,a.gender AS account_gender,l.city AS location_city,l.latitude,l.longitude FROM matchlove_profiles m LEFT JOIN auth_accounts a ON a.id=m.user LEFT JOIN matchlove_locations l ON l.user=m.user LEFT JOIN matchlove_vectors v ON v.user=m.user LEFT JOIN profiles p ON p.id=m.user WHERE m.user<>? AND COALESCE(p.paused,0)=0 AND NOT EXISTS(SELECT 1 FROM blocks WHERE (sender=? AND recipient=m.user) OR (recipient=? AND sender=m.user))").all(userId,userId,userId);
   const results=[],toScore=[];
   const myVectorRow=sqlite.prepare('SELECT * FROM matchlove_vectors WHERE user=?').get(userId);
   const embModel=process.env.MATCHLOVE_EMBEDDING_MODEL||EMBEDDING_MODEL;
   const decode=x=>{if(!x)return null;try{const v=JSON.parse(x);return Array.isArray(v)?v:null}catch{return null}};
   const myVectors=myVectorRow&&myVectorRow.source_updated===mine.updated&&myVectorRow.model===embModel?{self:decode(myVectorRow.self_vector),wanted:decode(myVectorRow.wanted_vector)}:null;
   for(const r of rows){
-   let parsed;try{parsed=applyGenderDefaults(JSON.parse(r.parsed),r.account_gender)}catch{continue}
+   let parsed;try{parsed={...applyGenderDefaults(JSON.parse(r.parsed),r.account_gender),matchingLocation:{city:r.location_city||r.city||'',latitude:r.latitude,longitude:r.longitude}}}catch{continue}
    const detail=rankMatch(myself,parsed);if(!detail)continue;
    const candidateVectors=myVectors&&r.vector_updated===r.updated&&r.vector_model===embModel?{self:decode(r.self_vector),wanted:decode(r.wanted_vector)}:null;
    const vectorRelevance=bidirectionalVectors(myVectors,candidateVectors);
    let age=null;if(r.birthdate){const birth=new Date(r.birthdate);if(Number.isFinite(birth.getTime())){age=new Date().getUTCFullYear()-birth.getUTCFullYear();}}
    const stored=sqlite.prepare('SELECT * FROM matchlove_ai_cache WHERE viewer=? AND candidate=? AND viewer_updated=? AND candidate_updated=? AND scoring_version=?').get(userId,r.user,mine.updated,r.updated,SCORING_VERSION);
    const mainPhoto=sqlite.prepare('SELECT id FROM matchlove_photos WHERE user=? AND is_main=1').get(r.user);
-   const result={media:mainPhoto?[{url:'/api/profile-photo?user='+encodeURIComponent(r.user),kind:'photo'}]:[],vectorRelevance,id:r.user,name:r.name||'Участник '+String(r.user).slice(0,4),city:r.city||parsed.self.location||'',age:age||parsed.self.age_min,score:detail.score,matches:detail.matches,confidence:detail.confidence,mutual:detail.mutual,location:detail.location,explanation:detail.explanation};
+   const result={media:mainPhoto?[{url:'/api/profile-photo?user='+encodeURIComponent(r.user),kind:'photo'}]:[],vectorRelevance,id:r.user,name:r.name||'Участник '+String(r.user).slice(0,4),city:r.location_city||r.city||parsed.self.location||'',age:age||parsed.self.age_min,score:detail.score,matches:detail.matches,distanceKm:detail.distanceKm,confidence:detail.confidence,mutual:detail.mutual,location:detail.location,explanation:detail.explanation};
    if(stored){try{const evidence=JSON.parse(stored.evidence);if(!Array.isArray(evidence))throw Error();Object.assign(result,scoreEvidence(myself,parsed,evidence),{aiEvaluated:true});}catch{toScore.push({id:r.user,profile:parsed,updated:r.updated,result,vectorRelevance});}}
    else toScore.push({id:r.user,profile:parsed,updated:r.updated,result,vectorRelevance});
    results.push(result);
