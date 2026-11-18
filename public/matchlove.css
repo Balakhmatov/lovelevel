@@ -67,3 +67,6 @@ textarea,.field{background:#0b0a0d;border:2px solid #48404a;border-radius:18px;c
 
 /* Reserve scrollbar space on every screen so navigation never shifts the layout. */
 html{scrollbar-gutter:stable}@supports not (scrollbar-gutter:stable){html{overflow-y:scroll}}.brand-home{padding:0;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer;text-decoration:none}.brand-home:focus-visible{outline:2px solid var(--red);outline-offset:7px;border-radius:8px}.logout-btn svg{flex:none;stroke-width:1.8}
+
+/* iOS Safari auto-zooms focused form controls below 16px and can retain that zoom after login. */
+.content,.wrap,.login,.stack,.stack>label{min-width:0}.login,.login .panel{width:100%}@media(max-width:740px){input:not([type=radio]):not([type=checkbox]):not([type=file]),textarea,select,.stack .field{font-size:16px}.stack .field{max-width:100%;min-width:0}.content{width:100%}}
