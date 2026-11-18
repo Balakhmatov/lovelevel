@@ -1,5 +1,5 @@
 import {TAG_SEEDS} from './tag-seeds.mjs';
-export const MIN_TAG_USERS=10;
+export const MIN_TAG_USERS=5;
 const json=(v,status=200)=>new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 const norm=s=>String(s||'').toLowerCase().replace(/ё/g,'е').trim().replace(/\s+/g,' ');
 const safe=tag=>typeof tag==='string'&&tag.trim().length>=3&&tag.trim().length<=70&&!/https?:|www\.|@|\d{3}|секс|фетиш|эрот|бдсм|диагноз|религи|полит|ориентац/i.test(tag)&&/^[\p{L}\p{N}\s,.'«»()—–-]+$/u.test(tag);
