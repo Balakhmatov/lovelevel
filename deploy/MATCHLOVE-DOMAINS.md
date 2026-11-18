@@ -18,11 +18,10 @@
 
 1. Получить реальный список Nginx vhost и DNS. Сохранить резервные копии активных конфигураций и `/etc/lovelevel/app.env` в root-only каталоге. Не печатать содержимое env-файлов, в них могут быть секреты. Не отключать общий vhost-файл, если в нём также находится `stage.cityai.site` или другой сервис.
 2. Создать DNS-запись `matchlove.cityai.site` на тот же VPS, что обслуживает `lovelevel.cityai.site`. При наличии AAAA проверить и IPv6. Дождаться DNS; не выпускать сертификат до этого.
-3. Обеспечить доступность HTTP для нового имени через отдельный временный vhost. Выпустить бесплатный сертификат Let’s Encrypt, покрывающий три точных имени: `matchlove.cityai.site`, `lovelevel.cityai.site`, `cityai.site`. На сервере с установленным Certbot Nginx plugin используется:
+3. Обеспечить доступность HTTP для нового имени через отдельный временный vhost. Для каждого точного имени нужен свой действующий сертификат Let’s Encrypt: `matchlove.cityai.site`, `lovelevel.cityai.site`, `cityai.site`. Старые сертификаты используются повторно. На сервере с установленным Certbot Nginx plugin используется:
 
    ```sh
-   certbot certonly --nginx --cert-name matchlove.cityai.site \
-     -d matchlove.cityai.site -d lovelevel.cityai.site -d cityai.site
+   certbot certonly --nginx -d matchlove.cityai.site
    ```
 
    Сертификат нужен и на старых HTTPS-адресах: редирект выполняется после TLS-соединения. Убедиться, что Certbot renewal timer активен. Если используется webroot-обновление сертификатов, все HTTP challenge-пути в шаблоне обслуживаются из `/var/www/lovelevel-acme`.
@@ -32,3 +31,9 @@
 7. Если используется Telegram, обновить домен Login Widget в BotFather, URL Mini App и webhook на новый origin. Скрипты настройки Telegram читают текущий `PUBLIC_ORIGIN`, не хранят токен в Git.
 
 При ошибке вернуть резервные копии конфигураций Nginx и app.env, проверить `nginx -t`, перезапустить только `lovelevel` и сделать graceful reload Nginx. Базы данных и release приложения переключение домена не затрагивает.
+
+## Проверенное переключение для текущей конфигурации VPS
+
+`switch-matchlove-domain.py --apply` предназначен для двух отдельных существующих vhost: `sites-enabled/cityai` содержит только `cityai.site`, `sites-enabled/lovelevel` — только `lovelevel.cityai.site`. Скрипт требует три отдельных сертификата, отказывается менять общие vhost и не принимает существующий `sites-enabled/matchlove`. Его нельзя добавлять в автоматический деплой.
+
+Запускать вместе с `matchlove-domains.conf` в том же каталоге, явно от root. До изменения блокирует параллельный LoveLevel deploy, делает root-only резервную копию, проверяет Nginx и локальный health. Меняет только два проверенных vhost, добавляет новый, обновляет PUBLIC_ORIGIN, перезапускает только LoveLevel и проверяет HTTPS/302 через loopback с правильным TLS hostname. При ошибке возвращает конфиги и app.env. Старые vhost-файлы остаются подключёнными как комментарии, их содержимое сохранено в резервной копии.
