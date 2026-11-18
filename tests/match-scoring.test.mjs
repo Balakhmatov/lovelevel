@@ -21,3 +21,32 @@ test('Negations do not count as a lexical match and hard constraints still exclu
  assert.equal(scoreEvidence(...pair({age_min:25,age_max:30},{age_min:40,age_max:40})),null);
  assert.equal(scoreEvidence(...pair({}, {gender:'male'})),null);
 });
+test('Extra candidate hobbies do not dilute the searching person category budget',()=>{
+ const [a,b]=pair();a.self.interests=['лес','машины'];b.self.interests=['лес','кино','спорт','музыка','танцы'];
+ assert.equal(scoreEvidence(a,b).score,9.9);
+});
+test('Per-tag embeddings award calibrated points and semantic conflict vetoes them',async()=>{
+ const {tagKey}=await import('../server/matchlove-embeddings.mjs');
+ const [a,b]=pair({interests:['путешествия']},{interests:['поездки за границу']});
+ const vectors=new Map([[tagKey('interests','путешествия'),[1,0]],[tagKey('interests','поездки за границу'),[.8,.6]]]);
+ const r=scoreEvidence(a,b,[],vectors);assert.equal(r.score,13.71);assert.equal(sum(r),r.score);
+ assert.equal(scoreEvidence(a,b,[{category:'interests',direction:'viewer',wantedEvidence:'путешествия',candidateEvidence:'поездки за границу',agreement:0}],vectors).score,1);
+});
+test('Habits have a fixed separate budget and opposite statements do not earn embedding points',async()=>{
+ const {tagKey}=await import('../server/matchlove-embeddings.mjs');
+ const [a,b]=pair({habits:['люблю пиво']},{habits:['не люблю пиво']});
+ const vectors=new Map([[tagKey('habits','люблю пиво'),[1,0]],[tagKey('habits','не люблю пиво'),[1,0]]]);
+ assert.equal(scoreEvidence(a,b,[],vectors).score,1);
+ b.self.habits=['люблю пиво'];assert.equal(scoreEvidence(a,b).score,4.56);
+ assert.equal(Object.values(WEIGHTS).reduce((a,b)=>a+b,0),100);
+});
+test('Implicit nearby age is soft while an explicit desired age takes precedence',()=>{
+ const [a,b]=pair();a.self.age_min=a.self.age_max=26;b.self.age_min=b.self.age_max=28;
+ assert.equal(scoreEvidence(a,b).score,25.92);
+ b.self.age_min=b.self.age_max=45;assert.equal(scoreEvidence(a,b).score,1);
+ a.wanted.age_min=40;a.wanted.age_max=50;assert.equal(scoreEvidence(a,b).score,25.92);
+});
+test('An erroneous affirmative semantic review cannot override opposite habits',()=>{
+ const [a,b]=pair({habits:['люблю пиво']},{habits:['не люблю пиво']});
+ assert.equal(scoreEvidence(a,b,[{category:'habits',direction:'viewer',wantedEvidence:'люблю пиво',candidateEvidence:'не люблю пиво',agreement:1}]).score,1);
+});

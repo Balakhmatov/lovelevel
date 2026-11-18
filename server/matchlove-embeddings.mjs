@@ -1,5 +1,5 @@
 // Compact two-vector retrieval for MatchLove. Only normalized structured descriptions are embedded.
-const FIELDS=['goal','interests','appearance','sexual_preferences','personality','profession'];
+const FIELDS=['goal','interests','appearance','sexual_preferences','personality','habits','profession'];
 export const EMBEDDING_MODEL='text-embedding-3-small';
 export const EMBEDDING_DIMENSIONS=512;
 function norm(x){return String(x||'').trim().toLowerCase();}
@@ -42,4 +42,28 @@ export async function generateEmbeddings(parsed,{apiKey,model=EMBEDDING_MODEL}){
   if(vectors.length!==inputs.length||vectors.some(x=>!Array.isArray(x)||x.length!==EMBEDDING_DIMENSIONS))throw Error('Invalid embeddings response');
   return {self:self?vectors[0]:null,wanted:wanted?vectors[vectors.length-1]:null};
  }finally{clearTimeout(timer)}
+}
+
+// Tag vectors are cached independently of profile revisions and never returned to clients.
+export function tagKey(category,text){return category+': '+String(text).trim().toLowerCase().replace(/ё/g,'е');}
+export async function loadTagVectors(sqlite,profiles,{apiKey,model=EMBEDDING_MODEL}={}){
+ const labels=new Set();
+ for(const profile of profiles)for(const side of ['self','wanted'])for(const category of FIELDS){
+  const p=profile[side]||{};
+  for(const label of [...(p[category]||[]),...(p.preferences||[]).filter(p=>p.category===category).flatMap(p=>[...(p.preferred||[]),...(p.excluded||[])])])labels.add(tagKey(category,label));
+ }
+ const vectors=new Map(),missing=[];
+ for(const label of labels){const row=sqlite.prepare('SELECT vector FROM matchlove_tag_vectors WHERE model=? AND tag=?').get(model,label);if(row){try{vectors.set(label,JSON.parse(row.vector));}catch{missing.push(label)}}else missing.push(label);}
+ if(!apiKey)return vectors;
+ for(let i=0;i<missing.length;i+=128){
+  const input=missing.slice(i,i+128),controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);
+  try{
+   const response=await fetch('https://api.openai.com/v1/embeddings',{method:'POST',signal:controller.signal,headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json'},body:JSON.stringify({model,dimensions:EMBEDDING_DIMENSIONS,encoding_format:'float',input})});
+   if(!response.ok)throw Error('Tag embedding API error '+response.status);
+   const data=await response.json(),rows=(data.data||[]).sort((a,b)=>a.index-b.index);
+   if(rows.length!==input.length||rows.some(r=>!Array.isArray(r.embedding)||r.embedding.length!==EMBEDDING_DIMENSIONS||r.embedding.some(v=>!Number.isFinite(v))))throw Error('Invalid tag embeddings');
+   for(let j=0;j<input.length;j++){vectors.set(input[j],rows[j].embedding);sqlite.prepare('INSERT OR REPLACE INTO matchlove_tag_vectors(model,tag,vector) VALUES(?,?,?)').run(model,input[j],JSON.stringify(rows[j].embedding));}
+  }catch(error){console.error('MatchLove tag embeddings unavailable:',error.name);break;}finally{clearTimeout(timer)}
+ }
+ return vectors;
 }

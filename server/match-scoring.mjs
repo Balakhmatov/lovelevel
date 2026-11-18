@@ -1,13 +1,15 @@
+import {cosine,tagKey} from './matchlove-embeddings.mjs';
 import {locationMatch} from './matching-location.mjs';
-export const SCORING_VERSION='evidence-v2-location';
+export const SCORING_VERSION='tags-v3-habits-soft-age';
 // 1 percentage point is reserved for a confirmed gender fit; 10 points are reserved for location, and the remaining 89 follow these proportions.
 // Missing facts never redistribute their unused category budget to the known categories.
-export const WEIGHTS={age:28,goal:24,interests:20,appearance:10,sexual_preferences:7,personality:8,profession:3};
+export const WEIGHTS={age:28,goal:24,interests:20,appearance:10,sexual_preferences:7,personality:4,habits:4,profession:3};
 export const SEMANTIC_FIELDS=Object.keys(WEIGHTS).filter(k=>k!=='age');
 const norm=s=>String(s||'').trim().toLowerCase().replace(/ё/g,'е');
 const unique=a=>[...new Set((a||[]).filter(x=>typeof x==='string').map(x=>x.trim()).filter(Boolean))];
 const tokens=s=>new Set((norm(s).match(/[а-яa-z0-9]{3,}/g)||[]).map(x=>x.replace(/(иями|ение|ости|ость|ами|ями|ого|ему|ыми|ими|ать|ять|ая|ые|ий|ый|ов|ев|ах|ях|ей|ие|ое|ой|ам|ям|ом|ем|ую|юю)$/,'')));
 function lexical(a,b){if(norm(a)===norm(b))return 1;const neg=s=>/(^|\s)(не|нет|без|not|no|without)(\s|$)/i.test(s);if(neg(a)!==neg(b))return 0;const x=tokens(a),y=tokens(b);if(!x.size||!y.size)return 0;const common=[...x].filter(t=>y.has(t)).length;const value=common/Math.max(x.size,y.size);return value>=.6?value:0;}
+const negative=s=>/(^|\s)(не|нет|без|not|no|without)(\s|$)|ненавиж|неперенос|неприемл/i.test(s);
 const canonical=v=>({мужчина:'male',парень:'male',мужской:'male',man:'male',male:'male',женщина:'female',девушка:'female',женский:'female',woman:'female',female:'female'}[norm(v)]||norm(v));
 function genderFit(wanted={},self={}){const g=canonical(wanted.gender),s=canonical(self.gender);if(!g||!s||['любой','любая','все','all','не важно'].includes(g))return null;return g===s;}
 function ageFit(wanted={},self={}){if(wanted.age_min==null&&wanted.age_max==null||self.age_min==null&&self.age_max==null)return null;return (wanted.age_max??100)>=(self.age_min??18)&&(self.age_max??100)>=(wanted.age_min??18);}
@@ -21,7 +23,26 @@ function finish(raw){
  const matches=rows.filter(r=>r.units>0).map(r=>({label:r.label,category:r.category,points:r.units/100})).sort((a,b)=>b.points-a.points);
  return {matches,score:target/100};
 }
-export function scoreEvidence(a,b,evidence=[]){
+export function scoreEvidence(a,b,evidence=[],vectors=new Map()){
+ const similarity=(category,left,right)=>{
+  const lexicalScore=lexical(left,right);
+  // Negated statements require explicit semantic confirmation; vector proximity alone cannot prove agreement.
+  if(negative(left)||negative(right))return norm(left)===norm(right)?1:0;
+  const value=cosine(vectors.get(tagKey(category,left)),vectors.get(tagKey(category,right)));
+  return Math.max(lexicalScore,value===null?0:Math.max(0,Math.min(1,(value-.55)/.35)));
+ };
+ const agreementFor=(category,direction,label,actual)=>{
+  let best=0;
+  for(const fact of actual){
+   let value=similarity(category,label,fact);
+   const reviews=evidence.filter(e=>e?.direction===direction&&e.category===category&&norm(e.wantedEvidence)===norm(label)&&norm(e.candidateEvidence)===norm(fact)&&Number.isFinite(e.agreement)&&e.agreement>=0&&e.agreement<=1);
+   if(negative(label)!==negative(fact))continue;
+   if(reviews.length){const review=Math.min(...reviews.map(e=>e.agreement));value=vectors.has(tagKey(category,label))&&vectors.has(tagKey(category,fact))?Math.min(value,review):review;}
+   const rejected=evidence.some(e=>e?.direction===direction&&e.category===category&&norm(e.wantedEvidence)===norm(label)&&e.agreement===0&&!e.candidateEvidence);
+   if(!rejected)best=Math.max(best,value);
+  }
+  return best;
+ };
  const directions=[{key:'viewer',wanted:a.wanted||{},self:b.self||{}},{key:'candidate',wanted:b.wanted||{},self:a.self||{}}];
  if(directions.some(d=>genderFit(d.wanted,d.self)===false||ageFit(d.wanted,d.self)===false))return null;
  const raw=[];if(directions.some(d=>genderFit(d.wanted,d.self)===true))raw.push({category:'gender',label:'Подходящий пол',units:100});
@@ -29,19 +50,18 @@ export function scoreEvidence(a,b,evidence=[]){
   const budget=weight*89;
   if(category==='age'){
    const requested=directions.filter(d=>d.wanted.age_min!=null||d.wanted.age_max!=null);
-   for(const d of requested)if(ageFit(d.wanted,d.self)===true){const min=d.wanted.age_min??18,max=d.wanted.age_max??100;raw.push({category,label:min===max?'Возраст '+min+' лет':'Возраст '+min+'–'+max+' лет',units:budget/requested.length});}continue;
+   for(const d of requested)if(ageFit(d.wanted,d.self)===true){const min=d.wanted.age_min??18,max=d.wanted.age_max??100;raw.push({category,label:min===max?'Возраст '+min+' лет':'Возраст '+min+'–'+max+' лет',units:budget/requested.length});}
+   if(!requested.length){const x=a.self?.age_min,y=b.self?.age_min;if(x!=null&&y!=null){const fit=Math.max(0,Math.min(1,(15-Math.abs(x-y))/10));if(fit>0)raw.push({category,label:'Близкий возраст',units:budget*fit});}}continue;
   }
   const requested=directions.filter(d=>criteria(d.wanted,category).length);
   if(requested.length){for(const d of requested){const wanted=criteria(d.wanted,category),actual=criteria(d.self,category),denominator=wanted.reduce((sum,x)=>sum+importance(d.wanted,category,x),0);
-   for(const wantedLabel of wanted){let agreement=actual.reduce((best,x)=>Math.max(best,lexical(wantedLabel,x)),0);
-    const items=evidence.filter(e=>e?.direction===d.key&&e.category===category&&norm(e.wantedEvidence)===norm(wantedLabel)&&Number.isFinite(e.agreement)&&e.agreement>=0&&e.agreement<=1&&(e.agreement===0||actual.some(x=>norm(x)===norm(e.candidateEvidence))));
-    if(items.length)agreement=Math.max(...items.map(e=>e.agreement));
+   for(const wantedLabel of wanted){const agreement=agreementFor(category,d.key,wantedLabel,actual);
     if(agreement>0&&actual.length)raw.push({category,label:wantedLabel.slice(0,100),units:budget/requested.length*importance(d.wanted,category,wantedLabel)/denominator*agreement});
    }
   }}else{
    // Shared self-described facts are evidence only when neither person sets a preference in this category.
-   const mine=criteria(a.self||{},category),other=criteria(b.self||{},category);const denominator=Math.max(mine.length,other.length);
-   for(const label of mine){const agreement=other.reduce((best,x)=>Math.max(best,lexical(label,x)),0);if(agreement>0)raw.push({category,label:label.slice(0,100),units:budget/denominator*agreement});}
+   const mine=criteria(a.self||{},category),other=criteria(b.self||{},category);const denominator=mine.length;
+   for(const label of mine){const agreement=agreementFor(category,'viewer',label,other);if(agreement>0)raw.push({category,label:label.slice(0,100),units:budget/denominator*agreement});}
   }
  }
  const proximity=locationMatch(a,b);if(proximity.units>0)raw.push({category:'location',label:proximity.label,units:proximity.units});
@@ -50,4 +70,4 @@ export function scoreEvidence(a,b,evidence=[]){
  return {...result,distanceKm:proximity.distanceKm,confidence:0,mutual:knownDirections.length===2,location:proximity.location,explanation:'',reasons:result.matches.map(m=>m.label)};
 }
 export function rankMatch(a,b){return scoreEvidence(a,b);}
-export function semanticProfile(p){return {self:p.self,wanted:p.wanted,criteria:Object.fromEntries(SEMANTIC_FIELDS.map(k=>[k,criteria(p.wanted||{},k)]))};}
+export function semanticProfile(p){return {self:p.self,wanted:p.wanted,criteria:Object.fromEntries(SEMANTIC_FIELDS.map(k=>[k,criteria(p.wanted||{},k).length?criteria(p.wanted||{},k):criteria(p.self||{},k)]))};}
