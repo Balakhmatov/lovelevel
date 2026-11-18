@@ -1,4 +1,5 @@
 import {TAG_SEEDS} from './tag-seeds.mjs';
+export const MIN_TAG_USERS=10;
 const json=(v,status=200)=>new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 const norm=s=>String(s||'').toLowerCase().replace(/ё/g,'е').trim().replace(/\s+/g,' ');
 const safe=tag=>typeof tag==='string'&&tag.trim().length>=3&&tag.trim().length<=70&&!/https?:|www\.|@|\d{3}|секс|фетиш|эрот|бдсм|диагноз|религи|полит|ориентац/i.test(tag)&&/^[\p{L}\p{N}\s,.'«»()—–-]+$/u.test(tag);
@@ -12,7 +13,7 @@ export async function handleTagSuggestions(request,{sqlite}){
  const url=new URL(request.url);if(request.method==='POST'&&request.headers.get('origin')!==url.origin)return json({error:'Недопустимый источник'},403);
  const body=request.method==='POST'?await request.json().catch(()=>({})):null;const q=request.method==='POST'?body.q:url.searchParams.get('q')||'';if(typeof q!=='string'||q.length>80)return json({suggestions:[]});
  const cleaned=norm(q),verb=cleaned.match(/^(?:я\s+)?(люблю|обожаю)\s*/),prefix=verb?verb[1]+' ':cleaned?'':'люблю ',query=verb?cleaned.slice(verb[0].length):cleaned,words=query.split(' ').filter(Boolean);
- const common=sqlite.prepare('SELECT tag,COUNT(*) AS count FROM matchlove_tag_usage GROUP BY tag HAVING COUNT(*)>=3').all();
+ const common=sqlite.prepare('SELECT tag,COUNT(DISTINCT user) AS count FROM matchlove_tag_usage GROUP BY tag HAVING COUNT(DISTINCT user)>=?').all(MIN_TAG_USERS);
  const rows=new Map(TAG_SEEDS.map((label,index)=>[norm(label),{label,popularity:0,index}]));
  for(const r of common)if(safe(r.tag)){const old=rows.get(norm(r.tag));rows.set(norm(r.tag),{label:old?.label||r.tag,popularity:r.count,index:old?.index??10000});}
  const matches=[...rows.values()].map(row=>({...row,key:norm(row.label)})).filter(row=>!query||words.every(word=>row.key.includes(word))).sort((a,b)=>Number(b.key.startsWith(query))-Number(a.key.startsWith(query))||b.popularity-a.popularity||a.index-b.index).slice(0,6);
