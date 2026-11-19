@@ -104,15 +104,15 @@ button,.photo-upload,.gender-dropdown>summary{border:0!important}
 .search-recovery{margin:14px 0;padding:14px 16px;border-radius:14px;background:#ff355f0b;color:#ead9e2}.search-recovery>p{font-size:14px;line-height:1.6}.search-recovery>div{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-top:12px}.search-recovery .btn{padding:10px 14px;font-size:13px}.search-recovery .link{font-size:13px}
 
 /* Fixed category palettes in both profile tabs and public profiles. */
-[data-category]{--tag-color:#f2e8ed;--tag-bg:#ffffff09;--tag-border:#ffffff26}
-[data-category=goal]{--tag-color:#b2ff7b;--tag-bg:#b2ff7b12;--tag-border:#b2ff7b40}
-[data-category=interests]{--tag-color:#ff829e;--tag-bg:#ff355f12;--tag-border:#ff355f44}
-[data-category=habits]{--tag-color:#fff7fb;--tag-bg:#ffffff12;--tag-border:#ffffff40}
-[data-category=personality]{--tag-color:#d5ffb5;--tag-bg:#b2ff7b09;--tag-border:#b2ff7b25}
-[data-category=profession]{--tag-color:#ded4dc;--tag-bg:#09090b;--tag-border:#b8a5b938}
-[data-category=appearance]{--tag-color:#ffc0d0;--tag-bg:#ff355f08;--tag-border:#ff9fb830}
-[data-category=sexual_preferences]{--tag-color:#e5e0e5;--tag-bg:#ffffff06;--tag-border:#ffffff18}
-[data-category] .profile-tags>span{color:var(--tag-color);background:var(--tag-bg);border-color:var(--tag-border)}
+[data-category]{--tag-color:#f2e8ed;--tag-bg:#2a242c}
+[data-category=goal]{--tag-color:#172410;--tag-bg:#b2ff7b}
+[data-category=interests]{--tag-color:#270c15;--tag-bg:#ff6589}
+[data-category=habits]{--tag-color:#261c25;--tag-bg:#eee7ec}
+[data-category=personality]{--tag-color:#ddffd2;--tag-bg:#31552f}
+[data-category=profession]{--tag-color:#e8e1e7;--tag-bg:#08080a}
+[data-category=appearance]{--tag-color:#321721;--tag-bg:#f6b6ca}
+[data-category=sexual_preferences]{--tag-color:#f5eff5;--tag-bg:#373139}
+[data-category] .profile-tags>span{color:var(--tag-color);background:var(--tag-bg);border:0}
 .profile-tag-suggestions{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}.profile-tag-suggestions[hidden]{display:none}.profile-tag-suggestions button{padding:7px 10px;border-radius:9px;color:var(--tag-color);background:var(--tag-bg);font-size:13px;text-align:left;line-height:1.4}.profile-tag-suggestions button:hover,.profile-tag-suggestions [aria-selected=true]{background:#ffffff15}
 .profile-carousel{display:block;overflow:hidden;scroll-snap-type:none;touch-action:pan-y pinch-zoom;user-select:none;position:relative}.profile-photo-track{display:flex;width:100%;height:100%;transform:translateX(0);will-change:transform}.profile-photo-track>img{display:block;flex:0 0 100%;width:100%;height:100%;min-width:0;object-fit:cover;pointer-events:none;user-select:none}.profile-photo-pagination{position:absolute;bottom:10px;left:20px;right:20px;display:flex;justify-content:center;gap:4px;z-index:1}.profile-photo-pagination button{width:5px;height:5px;flex:0 0 5px;padding:0;border-radius:50%;background:#ffffff55;box-shadow:0 1px 4px #0008}.profile-photo-pagination [aria-current=true]{background:#fff}
 .cardgrid .btn{display:flex;align-items:center;justify-content:center;gap:6px}.cardgrid .btn svg{width:17px;height:17px;flex:0 0 17px}
@@ -120,3 +120,6 @@ button,.photo-upload,.gender-dropdown>summary{border:0!important}
 
 .conversation-screen{background-color:#17131a;background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22240%22%20height%3D%22240%22%20viewBox%3D%220%200%20240%20240%22%20fill%3D%22none%22%20stroke%3D%22%23e6b9cd%22%20stroke-width%3D%221.4%22%20opacity%3D%22.07%22%3E%3Cpath%20d%3D%22M39%2047c-13-15-30%204-17%2016l17%2016%2017-16c13-12-4-31-17-16Z%22%2F%3E%3Cpath%20d%3D%22m160%2025%203%209%209%203-9%203-3%209-3-9-9-3%209-3Z%22%2F%3E%3Cpath%20d%3D%22M133%20117h35a8%208%200%200%201%208%208v17a8%208%200%200%201-8%208h-14l-11%209v-9h-10a8%208%200%200%201-8-8v-17a8%208%200%200%201%208-8Z%22%2F%3E%3Ccircle%20cx%3D%2255%22%20cy%3D%22177%22%20r%3D%227%22%2F%3E%3Cpath%20d%3D%22m191%20197%203%209%209%203-9%203-3%209-3-9-9-3%209-3ZM91%2094l5%205m0-5-5%205%22%2F%3E%3C%2Fsvg%3E");background-size:240px 240px}.conversation-screen .chathead,.conversation-screen .compose{background:#17131aeb}
 .profile-tag-suggestions button{max-width:100%;overflow-wrap:anywhere}
+.profile-tags{cursor:grab;user-select:none;-webkit-user-select:none}.profile-tags.is-dragging,.profile-tags.is-dragging *{cursor:grabbing!important;scroll-behavior:auto}
+
+.profile-tags>span{border:0}.editable-interest-tags button{color:inherit}.profile-tag-suggestions button:hover,.profile-tag-suggestions [aria-selected=true]{background:var(--tag-bg);filter:brightness(1.12)}

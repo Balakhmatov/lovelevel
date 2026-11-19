@@ -340,6 +340,23 @@ document.addEventListener('keydown',event=>{
 });
 
 document.addEventListener('keydown',event=>{if(!event.defaultPrevented&&event.target.matches('[data-tag-input]')&&event.key==='Enter'){event.preventDefault();changeProfileTag(event.target.dataset.tagInput);}});
+let tagDrag=null,tagDragClick=null;
+document.addEventListener('pointerdown',event=>{
+ if(event.pointerType!=='mouse'||event.button!==0||!event.isPrimary)return;
+ const row=event.target.closest('.profile-tags');if(!row||row.scrollWidth<=row.clientWidth)return;
+ const rect=row.getBoundingClientRect();if(event.clientY>=rect.top+row.clientHeight)return;
+ tagDrag={row,id:event.pointerId,x:event.clientX,y:event.clientY,left:row.scrollLeft,moved:false};
+});
+document.addEventListener('pointermove',event=>{
+ const drag=tagDrag;if(!drag||event.pointerId!==drag.id)return;const dx=event.clientX-drag.x;
+ if(!drag.moved){if(Math.abs(dx)<5||Math.abs(dx)<Math.abs(event.clientY-drag.y))return;drag.moved=true;drag.row.setPointerCapture(event.pointerId);drag.row.classList.add('is-dragging');}
+ event.preventDefault();drag.row.scrollLeft=drag.left-dx;
+},{passive:false});
+function finishTagDrag(event){const drag=tagDrag;if(!drag||event.pointerId!==drag.id)return;tagDrag=null;drag.row.classList.remove('is-dragging');if(event.type==='pointerup'&&drag.moved){const ignored={row:drag.row};tagDragClick=ignored;setTimeout(()=>{if(tagDragClick===ignored)tagDragClick=null;},250);}if(drag.row.hasPointerCapture(event.pointerId))drag.row.releasePointerCapture(event.pointerId);}
+document.addEventListener('pointerup',finishTagDrag);document.addEventListener('pointercancel',finishTagDrag);
+document.addEventListener('lostpointercapture',event=>{if(tagDrag?.id===event.pointerId){tagDrag.row.classList.remove('is-dragging');tagDrag=null;}});
+document.addEventListener('click',event=>{if(tagDragClick&&tagDragClick.row.contains(event.target)){tagDragClick=null;event.preventDefault();event.stopImmediatePropagation();}},true);
+
 window.addEventListener('hashchange',()=>{});boot();
 
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#gender-picker')?.hasAttribute('open')){$('#gender-picker').removeAttribute('open');$('#account-gender')?.focus();}});
