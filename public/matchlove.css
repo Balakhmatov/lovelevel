@@ -123,3 +123,12 @@ button,.photo-upload,.gender-dropdown>summary{border:0!important}
 .profile-tags{cursor:grab;user-select:none;-webkit-user-select:none}.profile-tags.is-dragging,.profile-tags.is-dragging *{cursor:grabbing!important;scroll-behavior:auto}
 
 .profile-tags>span{border:0}.editable-interest-tags button{color:inherit}.profile-tag-suggestions button:hover,.profile-tag-suggestions [aria-selected=true]{background:var(--tag-bg);filter:brightness(1.12)}
+
+/* A continuous viewport background, including Safari rubber-band and safe areas. */
+html{background:#160e14;overscroll-behavior-y:none}
+body{background:transparent;isolation:isolate;overscroll-behavior-y:none}
+body::before{content:"";position:fixed;inset:-50vh -15vw;z-index:-1;pointer-events:none;background:radial-gradient(ellipse at 55% 25%,#38131f 0,#1c1018 30%,#09090b 65%)}
+@font-face{font-family:Manrope;src:url('/fonts/manrope-v1.woff2') format('woff2');font-weight:200 800;font-display:swap}
+:root{font-family:Manrope,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,.btn,.premium,.photo-upload,.navbtn,.bottomnav button,.stack label{font-weight:650;letter-spacing:0}
+h1,h2,h3{font-weight:800;letter-spacing:-.035em}

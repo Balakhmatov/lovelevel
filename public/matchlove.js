@@ -108,7 +108,7 @@ async function sendPresence(active=true,extra={}){if(!S.logged)return;try{await 
 function startPresence(){clearInterval(presenceTimer);if(!S.logged)return;void sendPresence(document.visibilityState==='visible');presenceTimer=setInterval(()=>{if(document.visibilityState==='visible')void sendPresence();},15000);}
 async function reportTyping(typing,target=S.chat){if(!target||!S.logged)return;const now=Date.now();if(typing&&lastTypingTarget===target&&now-lastTypingAt<1500)return;if(typing){lastTypingAt=now;lastTypingTarget=target;}else if(lastTypingTarget===target){lastTypingAt=0;lastTypingTarget='';}await sendPresence(document.visibilityState==='visible',{target,typing});}
 function stopChatActivity(offline=false){clearInterval(S.chatTimer);S.chatTimer=null;clearTimeout(typingTimer);if(!offline&&S.page==='conversation'&&S.chat)void reportTyping(false,S.chat);}
-async function openChat(id){stopChatActivity();const openSequence=++chatOpenSequence;S.chat=id;S.chatPeer=null;S.messages=[];S.page='conversation';render();void sendPresence();await refreshChat(true);if(S.page==='conversation'&&S.chat===id&&openSequence===chatOpenSequence)S.chatTimer=setInterval(()=>{if(document.visibilityState==='visible')void refreshChat();},1500);}
+async function openChat(id){++navigationSequence;stopChatActivity();const openSequence=++chatOpenSequence;S.chat=id;S.chatPeer=null;S.messages=[];S.page='conversation';render();void sendPresence();await refreshChat(true);if(S.page==='conversation'&&S.chat===id&&openSequence===chatOpenSequence)S.chatTimer=setInterval(()=>{if(document.visibilityState==='visible')void refreshChat();},1500);}
 async function refreshChat(forceBottom=false){
  if(!S.chat||S.page!=='conversation')return;const target=S.chat,sequence=++chatReadSequence;
  try{const data=await api('ml-chat?target='+encodeURIComponent(target));if(S.chat!==target||S.page!=='conversation'||sequence<chatAppliedSequence)return;chatAppliedSequence=sequence;
@@ -134,8 +134,21 @@ window.addEventListener('resize',syncChatViewport);window.visualViewport?.addEve
 function render(){document.documentElement.classList.toggle('in-conversation',S.page==='conversation');captureProfileDraft();clearTagSuggestions();clearProfileTagSuggestions();const pages={home:pageHome,results,loading,login,chats,premium:price,conversation,profile:profilePage,viewProfile:profilePage};$('#app').innerHTML=S.page==='conversation'?'<main class="conversation-screen">'+conversation()+'</main><div id="toast" role="status"></div>':S.page==='loading'?'<main class="search-fullscreen"><div class="search-brand">'+brand()+'</div>'+loading()+'</main>':shell((pages[S.page]||pageHome)());document.title='MatchLove — знакомства по смыслу';initProfileCarousel();syncChatViewport();requestAnimationFrame(maybeShowLocationPrompt);}
 function toast(message){const t=$('#toast');if(!t)return;t.textContent=message;t.style.cssText='position:fixed;top:85px;right:18px;z-index:50;background:#301b26;color:#fff;border:2px solid #ff355f;border-radius:14px;padding:14px 20px;max-width:320px;font-size:13px;box-shadow:0 20px 40px #0009';setTimeout(()=>{if(t.isConnected)t.remove()},3600)}
 async function loadSearchSettings(){try{S.searchSettings=await api('ml-search-settings');}catch{S.searchSettings={hideConflicts:false};}}
-async function go(page){if(page==='profile'){await openProfile();return;}S.query=$('#about')?.value??S.query;stopChatActivity();if(['chats','results'].includes(page)&&S.logged)await loadMatches();if(page==='results'&&searchResultsDirty&&S.logged){try{const saved=await api('ai-match');S.results=saved.results||[];S.hiddenResults=saved.hiddenCount||0;searchResultsDirty=false;}catch(error){toast(error.message);}}S.page=page;render();window.scrollTo(0,0)}
-async function loadMatches(){try{S.social=await api('ml-social');S.matches=S.social.matches||[]}catch{S.social={incoming:[],matches:[],outgoing:[]};S.matches=[]}}
+let navigationSequence=0;
+let socialRefresh=null;
+async function go(page){
+ if(page==='profile'){await openProfile();return;}
+ const sequence=++navigationSequence,owner=S.me?.id;
+ S.query=$('#about')?.value??S.query;captureProfileDraft();stopChatActivity();S.page=page;render();window.scrollTo({top:0,behavior:'instant'});
+ if(!S.logged||!['chats','results'].includes(page))return;
+ // Navigation never waits for semantic scoring or network requests.
+ const refreshSocial=async()=>{if(!socialRefresh){socialRefresh=loadMatches().finally(()=>{socialRefresh=null;});}await socialRefresh;};
+ const refreshResults=async()=>{if(page!=='results'||!searchResultsDirty)return;try{const saved=await api('ai-match');if(S.me?.id!==owner)return;S.results=saved.results||[];S.hiddenResults=saved.hiddenCount||0;searchResultsDirty=false;}catch(error){if(sequence===navigationSequence)toast(error.message);}};
+ await Promise.allSettled([refreshSocial(),refreshResults()]);
+ if(S.me?.id===owner&&sequence===navigationSequence&&S.page===page)render();
+}
+async function loadMatches(){const owner=S.me?.id;try{const social=await api('ml-social');if(S.me?.id!==owner)return;S.social=social;S.matches=social.matches||[]}catch{}}
+
 function applyGallery(saved){S.photos=saved.photos||[];S.imageURL=saved.url||'';}
 async function restoreSearchPhoto(){
  if(!S.logged||S.image)return;const owner=S.me?.id;
@@ -176,6 +189,7 @@ async function search(){
  finally{clearInterval(timer);S.processing=false;}
 }
 async function logout(){
+ ++navigationSequence;
  const button=$('#logout');if(button)button.disabled=true;
  try{clearSearchDraft();S.searchError='';clearInterval(presenceTimer);stopChatActivity(true);await sendPresence(false);await api('auth/logout',{method:'POST',body:{}});if(S.chatTimer)clearInterval(S.chatTimer);if(S.imageURL)URL.revokeObjectURL(S.imageURL);
  clearInterval(presenceTimer);presenceTimer=null;chatDrafts.clear();S.searchSettings={hideConflicts:false};S.hiddenResults=0;searchResultsDirty=false;profileView=null;profileDraft=null;Object.assign(S,{page:'home',query:'',image:null,imageURL:'',photos:[],pendingPhotos:[],photoSaving:false,genderSaving:false,locationSaving:false,location:{city:'',enabled:false},photoError:'',me:null,logged:false,profiles:[],results:[],matches:[],social:{incoming:[],matches:[],outgoing:[]},chat:null,messages:[],processing:false,authMode:'login',error:'',chatTimer:null});render();toast('Ты вышел из аккаунта');
@@ -289,9 +303,12 @@ function profilePage(){
 }
 async function openProfile(id){
  if(!S.logged){await go('login');return;}
+ const sequence=++navigationSequence,owner=S.me?.id;
  captureProfileDraft();S.query=$('#about')?.value??S.query;
  if(S.page!=='profile'&&S.page!=='viewProfile')profileReturn=S.page;
- try{const view=await api('ml-profile'+(id?'?user='+encodeURIComponent(id):''));stopChatActivity();profileGeneration++;profileView=view;if(view.own&&view.searchSettings)S.searchSettings=view.searchSettings;profileDraft=structuredClone(view.profile);profileTab='self';S.page=view.own?'profile':'viewProfile';render();window.scrollTo(0,0);}catch(error){toast(error.message);}
+ stopChatActivity();
+ profileView=null;profileDraft=null;profileGeneration++;S.page=id?'viewProfile':'profile';render();window.scrollTo({top:0,behavior:'instant'});
+ try{const view=await api('ml-profile'+(id?'?user='+encodeURIComponent(id):''));if(sequence!==navigationSequence||S.me?.id!==owner)return;profileGeneration++;profileView=view;if(view.own&&view.searchSettings)S.searchSettings=view.searchSettings;profileDraft=structuredClone(view.profile);profileTab='self';render();}catch(error){if(sequence===navigationSequence)toast(error.message);}
 }
 async function saveProfile(){
  if(profileSaving||!profileView?.own)return;
