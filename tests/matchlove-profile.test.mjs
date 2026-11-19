@@ -38,3 +38,9 @@ test('Profiles support manual creation, protected AI merges, gallery access and 
  app.sqlite.prepare('DELETE FROM auth_accounts WHERE id=?').run(a.id);assert.equal(app.sqlite.prepare('SELECT COUNT(*) AS n FROM matchlove_profile_overrides').get().n,0);
  }finally{app.server.closeAllConnections();await new Promise(r=>app.server.close(r));await rm(dir,{recursive:true,force:true});}
 });
+test('AI wishes stored in preferences become editable category tags without resurrecting manual deletions',async()=>{
+ const {mergeManualProfile}=await import('../server/matchlove-profile.mjs');
+ const parsed={self:{interests:['лес']},wanted:{interests:[],personality:[],preferences:[{category:'interests',preferred:['путешествия','кино'],importance:'normal'},{category:'personality',preferred:['чувство юмора'],importance:'strong'}]}};
+ let profile=mergeManualProfile(parsed);assert.deepEqual(profile.wanted.interests,['путешествия','кино']);assert.deepEqual(profile.wanted.personality,['чувство юмора']);
+ profile=mergeManualProfile(parsed,{wanted:{interests:[]}});assert.deepEqual(profile.wanted.interests,[]);assert.deepEqual(profile.wanted.personality,['чувство юмора']);assert.equal(profile.wanted.preferences.length,1);
+});

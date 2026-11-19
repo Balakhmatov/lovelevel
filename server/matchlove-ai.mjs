@@ -37,7 +37,7 @@ export function applyGenderDefaults(parsed,gender){
  return {...parsed,self:{...parsed.self,gender},wanted:{...parsed.wanted,gender:parsed.genderPreferenceExplicit===false?(gender==='male'?'female':'male'):(parsed.wanted?.gender|| (gender==='male'?'female':'male'))}};
 }
 
-export async function handleMatchAI(request,{sqlite,userId,apiKey,model,candidateIds=null,includeHabitConflicts=false}){
+export async function handleMatchAI(request,{sqlite,userId,apiKey,model,candidateIds=null,includeConflicts=false}){
  if(!userId)return json({error:'Необходимо войти в аккаунт'},401);
  if(request.method==='POST'){
   if(request.headers.get('origin')!==new URL(request.url).origin)return json({error:'Недопустимый источник запроса'},403);
@@ -132,8 +132,8 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model,candidat
    for(let i=0;i<batches.length;i+=3)await Promise.all(batches.slice(i,i+3).map(evaluate));
   }
   results.sort((a,b)=>b.score-a.score||((b.vectorRelevance??-1)-(a.vectorRelevance??-1))||(b.location==='same')-(a.location==='same')||a.name.localeCompare(b.name));
-  const hidden=!includeHabitConflicts&&searchSettings(sqlite,userId).hideHabitConflicts;
-  const visible=hidden?results.filter(p=>!p.conflicts.some(f=>f.category==='habits')):results;
+  const hidden=!includeConflicts&&searchSettings(sqlite,userId).hideConflicts;
+  const visible=hidden?results.filter(p=>!p.conflicts.length):results;
   console.info(JSON.stringify({event:'matchlove_match_search',requestId,candidates:rows.length,results:visible.length,embeddingMs,comparisonMs:Date.now()-comparisonStarted,durationMs:Date.now()-started}));
   return json({saved:true,results:visible,total:visible.length,hiddenCount:results.length-visible.length,source:mine.source});
  }

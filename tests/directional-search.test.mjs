@@ -33,6 +33,12 @@ test('Directional scores survive likes; confirmed habit conflicts stay visible u
  social=await(await call('/api/ml-social',{cookie:a.cookie})).json();assert.equal(social.matches[0].score,82.2); // Search filter cannot erase an existing conversation.
  await call('/api/ml-search-settings',{method:'PATCH',cookie:a.cookie,body:{hideHabitConflicts:false}});
  results=await(await call('/api/ai-match',{cookie:a.cookie})).json();assert.equal(results.results[0].score,82.2);
+ const markWithExclusion=structuredClone(mark),aliceWithoutHabitConflict=structuredClone(alice);
+ markWithExclusion.wanted.preferences=[{category:'goal',preferred:[],excluded:['встречи без обязательств'],importance:'normal'}];aliceWithoutHabitConflict.self.goal=['встречи без обязательств'];aliceWithoutHabitConflict.self.habits=['не курю','иногда употребляю алкоголь'];
+ app.sqlite.prepare('UPDATE matchlove_profiles SET parsed=?,updated=? WHERE user=?').run(JSON.stringify(markWithExclusion),'next',a.id);app.sqlite.prepare('UPDATE matchlove_profiles SET parsed=?,updated=? WHERE user=?').run(JSON.stringify(aliceWithoutHabitConflict),'next',b.id);
+ results=await(await call('/api/ai-match',{cookie:a.cookie})).json();assert.equal(results.results.length,1);assert.equal(results.results[0].conflicts[0].category,'goal');assert.equal(results.results[0].conflicts.length,1);
+ await call('/api/ml-search-settings',{method:'PATCH',cookie:a.cookie,body:{hideConflicts:true}});
+ results=await(await call('/api/ai-match',{cookie:a.cookie})).json();assert.equal(results.results.length,0);assert.equal(results.hiddenCount,1);assert.equal((await(await call('/api/ml-search-settings',{cookie:a.cookie})).json()).hideConflicts,true);
  app.sqlite.prepare('DELETE FROM auth_accounts WHERE id=?').run(a.id);assert.equal(app.sqlite.prepare('SELECT COUNT(*) AS n FROM matchlove_search_settings').get().n,0);
  }finally{app.server.closeAllConnections();await new Promise(r=>app.server.close(r));await rm(dir,{recursive:true,force:true});}
 });

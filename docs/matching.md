@@ -33,7 +33,7 @@ Scores and caches are ordered by `(viewer, candidate)`, including when a candida
 
 `conflicts` contains verified candidate facts that contradict the viewer's stated wishes. Smoking and alcohol conflicts use conservative explicit habit states; liking beer alone does not prove alcohol consumption. Semantic conflicts additionally require `conflict=true`, zero agreement, viewer direction, and exact evidence present in both stored profiles. Missing information and unrelated interests do not create conflicts. Conflicts never deduct extra points or automatically exclude people. The existing viewer gender/explicit age filters remain.
 
-The profile's “Кого ищу” tab has an optional habit filter, off by default. `GET/PATCH /api/ml-search-settings` persists `hideHabitConflicts` per account with same-origin checks. Only an explicit opt-in hides candidates with confirmed habit conflicts from search; other categories, unknown habits and existing likes/conversations remain visible. Public profiles expose the viewer's relevant conflicts but never the candidate's private search settings. Search results report `hiddenCount` so an empty filtered list can explain how to restore it.
+The profile's “Кого ищу” tab has an optional confirmed-conflict filter, off by default. `GET/PATCH /api/ml-search-settings` persists `hideConflicts` per account with same-origin checks (`hideHabitConflicts` remains a legacy alias). Only an explicit opt-in hides candidates with confirmed conflicts in any category from search; unknown facts and existing likes/conversations remain visible. Public profiles expose the viewer's relevant conflicts but never the candidate's private search settings. Search results report `hiddenCount` so an empty filtered list can explain how to restore it.
 
 
 ## Profile parsing reliability and diagnostics
@@ -45,3 +45,12 @@ Descriptions accept 100–12,000 characters and are never silently truncated. Th
 Failed parsing leaves the previous stored profile unchanged. The search page retains the current draft in per-account sessionStorage, including across reloads in the same tab, and clears it after successful search or logout. An inline recovery message offers retry and the existing manual profile editor. Non-JSON gateway responses and network errors receive readable messages instead of JSON syntax errors or provider details.
 
 Journal events `matchlove_profile_parse`, `matchlove_profile_embedding`, `matchlove_profile_saved`, `matchlove_match_search` and `matchlove_search_failed` identify stages and durations. Parsing events include completion/reasoning token counts, finish reason, upstream status/code/request ID and an internal request ID. They never record the description, extracted profile, API key or provider response body.
+
+
+## Profile dictionaries and presentation
+
+Profile tag inputs request `/api/tag-suggestions` with `category` and `format=tag`; free-text search retains its hobby phrase completion format. Each category has curated seeds. Non-sensitive user-created phrases are counted by distinct account in `matchlove_category_tag_usage`, once across both self/wanted sides, and become common suggestions at five accounts. Editing/removing tags refreshes that usage transactionally. Intimate preferences use curated suggestions only; raw sensitive phrases/contact information are not published as community suggestions. Migration 0014 preserves existing hobby usage.
+
+AI `wanted.preferences[].preferred` clauses are materialized into the corresponding editable tag categories, so wishes participate in both scoring and profile display. Manual category overrides still win, including explicit empty arrays. Category colors are consistent across both tabs and public profiles.
+
+The photo gallery uses actual slides and a logical modulo index, without clone positions or native scrollbar resets. Arrows, touch swipes, keyboard and dots share the same index. Four photos create exactly four dots; a wrap transitions directly to the first/last photo. Main photos appear first in both own and public carousels. Portrait chat avatars are constrained to a 44×44 rounded square with an online dot; chat keeps its full-screen layout with a muted original SVG background pattern.

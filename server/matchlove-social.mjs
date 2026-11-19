@@ -19,7 +19,7 @@ export async function handleSocial(request,{sqlite:db,userId:id,apiKey,model}){
  }
  if(path==='/api/ml-social'&&method==='GET'){
   const rows=db.prepare("SELECT m.user AS id,COALESCE(NULLIF(json_extract(m.parsed,'$.self.name'),''),p.name,'') AS name,COALESCE(NULLIF(json_extract(m.parsed,'$.self.location'),''),p.city,'') AS city,CAST(json_extract(m.parsed,'$.self.age_min') AS INTEGER) AS age_min, (SELECT 1 FROM likes my WHERE my.sender=? AND my.recipient=m.user) AS liked, (SELECT 1 FROM likes theirs WHERE theirs.sender=m.user AND theirs.recipient=?) AS liked_me FROM matchlove_profiles m LEFT JOIN profiles p ON p.id=m.user WHERE m.user<>? AND NOT EXISTS(SELECT 1 FROM blocks WHERE (sender=? AND recipient=m.user) OR (sender=m.user AND recipient=?)) AND (EXISTS(SELECT 1 FROM likes l WHERE l.sender=m.user AND l.recipient=?) OR EXISTS(SELECT 1 FROM likes l WHERE l.sender=? AND l.recipient=m.user)) ORDER BY m.updated DESC").all(id,id,id,id,id,id,id);
-  const ranked=rows.length?await(await handleMatchAI(request,{sqlite:db,userId:id,apiKey,model,candidateIds:rows.map(r=>r.id),includeHabitConflicts:true})).json():{results:[]};
+  const ranked=rows.length?await(await handleMatchAI(request,{sqlite:db,userId:id,apiKey,model,candidateIds:rows.map(r=>r.id),includeConflicts:true})).json():{results:[]};
   const scores=new Map((ranked.results||[]).map(p=>[p.id,p]));
   const incoming=[],matches=[],outgoing=[];
   for(const r of rows){const p={...person(r),...(scores.get(r.id)||{score:null,conflicts:[],matches:[]}),liked:!!r.liked,likedMe:!!r.liked_me,matched:!!r.liked&&!!r.liked_me};if(p.matched)matches.push(p);else if(p.likedMe)incoming.push(p);else outgoing.push(p)}

@@ -1,5 +1,5 @@
 import {findConflicts} from './match-conflicts.mjs';
-import {SCORING_VERSION} from './match-scoring.mjs';
+import {SCORING_VERSION,criteria} from './match-scoring.mjs';
 import {searchSettings} from './search-settings.mjs';
 import {randomUUID} from 'node:crypto';
 import {updateTagUsage} from './tag-suggestions.mjs';
@@ -10,6 +10,8 @@ export function mergeManualProfile(parsed,overrides={}){
  const result={...parsed,self:{...EMPTY,...parsed.self,...overrides.self},wanted:{...EMPTY,...parsed.wanted,...overrides.wanted}};
  // A manually replaced category must also replace AI-generated preference clauses for it.
  for(const side of ['self','wanted'])result[side].preferences=(result[side].preferences||[]).filter(p=>!Object.hasOwn(overrides[side]||{},p.category));
+ // Preferences may carry the AI's wishes even when the direct category array is empty.
+ for(const category of PROFILE_LISTS)result.wanted[category]=criteria(result.wanted,category);
  if(Object.hasOwn(overrides.wanted||{},'gender'))result.genderPreferenceExplicit=!!overrides.wanted.gender;
  return result;
 }

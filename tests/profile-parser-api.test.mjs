@@ -31,3 +31,13 @@ test('Successful parsing saves the full long description even if optional embedd
   const response=await handleMatchAI(request(text),{sqlite:db,userId:'viewer',apiKey:'test'});assert.equal(response.status,200);assert.equal(received,text);const row=db.prepare('SELECT source,parsed FROM matchlove_profiles WHERE user=?').get('viewer');assert.equal(row.source,text);assert.deepEqual(JSON.parse(row.parsed).self.interests,['путешествия']);
  }finally{globalThis.fetch=original;db.close();}
 });
+test('Wishes emitted only as preferred clauses are saved and exposed as profile category tags',async()=>{
+ const db=setup(),original=globalThis.fetch;
+ try{
+  globalThis.fetch=async url=>url.endsWith('/embeddings')?new Response('{}',{status:503}):new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify({self:{interests:['лес']},wanted:{interests:[],personality:[],preferences:[{category:'interests',preferred:['ночные поездки'],acceptable:[],excluded:[],importance:'normal',context:''},{category:'personality',preferred:['чувство юмора'],acceptable:[],excluded:[],importance:'strong',context:''}]}})}}]}));
+  const response=await handleMatchAI(request('Хочу встретить человека с чувством юмора и вместе ездить по ночному городу. '.repeat(3)),{sqlite:db,userId:'viewer',apiKey:'test'});assert.equal(response.status,200);
+  const stored=JSON.parse(db.prepare('SELECT parsed FROM matchlove_profiles WHERE user=?').get('viewer').parsed);assert.deepEqual(stored.wanted.interests,['ночные поездки']);assert.deepEqual(stored.wanted.personality,['чувство юмора']);
+  const {handleProfile}=await import('../server/matchlove-profile.mjs');const view=await(await handleProfile(new Request(origin+'/api/ml-profile'),{sqlite:db,userId:'viewer'})).json();assert.deepEqual(view.profile.wanted.interests,['ночные поездки']);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM matchlove_category_tag_usage WHERE user=? AND category='personality'").get('viewer').n,1);
+ }finally{globalThis.fetch=original;db.close();}
+});
