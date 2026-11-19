@@ -134,3 +134,15 @@ button,.btn,.premium,.photo-upload,.navbtn,.bottomnav button,.stack label{font-w
 h1,h2,h3{font-weight:800;letter-spacing:-.035em}
 
 .card-distance{display:flex;align-items:center;gap:5px}.card-distance svg{width:14px;height:14px;flex:0 0 14px;stroke-width:1.7}
+
+/* Keep desktop navigation beside the conversation; mobile chat fills the viewport. */
+@media(min-width:741px){
+ .in-conversation .content{height:100dvh;display:flex;flex-direction:column;padding-bottom:24px}
+ .in-conversation .top{flex:0 0 auto;margin-bottom:20px}
+ .in-conversation .wrap{display:flex;flex:1;min-height:0;width:100%;max-width:900px}
+ .conversation-screen{position:relative;inset:auto;height:100%;width:100%;padding:0;border-radius:20px}
+ .conversation-screen .chathead{padding:16px 24px}
+ .conversation-screen .messages{padding:20px 28px}
+ .conversation-screen .compose{padding:12px 24px 20px}
+}
+@media(max-width:740px){.in-conversation .top,.in-conversation .bottomnav{display:none}.in-conversation .content{padding:0}}
