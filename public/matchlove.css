@@ -174,3 +174,5 @@ html.in-conversation{background:#17131a;scrollbar-gutter:auto}
  .in-conversation body::before{inset:-100lvh -20vw}
  .conversation-screen .compose{padding-bottom:max(12px,env(safe-area-inset-bottom))}
 }
+
+.legal-links{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:12px;font-size:11px;line-height:1.5}.legal-links a,.notice a{color:#b5b0b9;text-decoration:underline;text-underline-offset:3px}.stack label:has([name=terms]){flex-wrap:wrap}.stack label:has([name=terms]) a{color:var(--green)}
