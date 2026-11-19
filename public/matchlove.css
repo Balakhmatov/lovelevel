@@ -164,3 +164,13 @@ h1,h2,h3{font-weight:800;letter-spacing:-.035em}
  .in-conversation .top .premium,.in-conversation .top .logout-btn{padding:10px;font-size:12px}
  .conversation-screen .chathead{padding-left:14px;padding-right:250px;gap:8px}
 }
+
+/* Match Safari's exposed canvas to the conversation, beyond the visual viewport. */
+html.in-conversation{background:#17131a;scrollbar-gutter:auto}
+.in-conversation body{background:#17131a}
+.in-conversation body::before{background:#17131a}
+.conversation-screen .compose{background:#17131a}
+@media(max-width:740px){
+ .in-conversation body::before{inset:-100lvh -20vw}
+ .conversation-screen .compose{padding-bottom:max(12px,env(safe-area-inset-bottom))}
+}
