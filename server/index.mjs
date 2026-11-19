@@ -1,3 +1,4 @@
+import {handleEmailSettings,startEmailWorker} from './email-notifications.mjs';
 import {isMain} from './entrypoint.mjs';
 import http from 'node:http';
 import {statfs} from 'node:fs/promises';
@@ -25,6 +26,7 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
  const {sqlite,DB}=openDatabase(resolve(dataDir,'lovelevel.sqlite'),resolve(dirname(fileURLToPath(import.meta.url)),'../drizzle'));
  initMatchAI(sqlite);
  const auth=createAuth(sqlite,{origin,secure:secureCookies,registration,inviteCode,telegramBotToken,telegramBotUsername});
+ const stopEmailWorker=startEmailWorker(sqlite,{origin});
  const env={DB,BUCKET:diskBucket(resolve(dataDir,'uploads')),ADMIN_USER_IDS:adminIds};
  let uploads=0;
  const server=http.createServer({requestTimeout:180000,headersTimeout:10000,maxHeaderSize:16*1024},async(req,res)=>{
@@ -76,6 +78,7 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
    if(path.pathname==='/api/telegram/webhook')response=await botMenu(request,{token:telegramBotToken,origin});
    else if(path.pathname.startsWith('/api/auth/'))response=await auth.route(request,ip);
    else if(['/api/search-photo','/api/search-photo-info','/api/profile-photo'].includes(path.pathname))response=await handleSearchPhoto(request,{sqlite,userId:identity?.id});
+   else if(path.pathname==='/api/ml-email-settings')response=await handleEmailSettings(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/ml-profile')response=await handleProfile(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/ml-search-settings')response=await handleSearchSettings(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/location')response=await handleLocation(request,{sqlite,userId:identity?.id});
@@ -95,6 +98,7 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
   }catch(error){console.error('Request failed:',error.code||error.name);if(!res.headersSent){res.writeHead(500,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end('{"error":"Не удалось выполнить запрос. Попробуйте ещё раз."}');}else res.destroy();}finally{if(uploadSlot)uploads--;}
  });
  server.on('close',()=>sqlite.close());
+ server.on('close',stopEmailWorker);
  return {server,sqlite,env,auth,host};
 }
 
