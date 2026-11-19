@@ -146,3 +146,21 @@ h1,h2,h3{font-weight:800;letter-spacing:-.035em}
  .conversation-screen .compose{padding:12px 24px 20px}
 }
 @media(max-width:740px){.in-conversation .top,.in-conversation .bottomnav{display:none}.in-conversation .content{padding:0}}
+
+.chat-peer-avatar,.chat-peer-avatar>img{border-radius:50%}
+@media(min-width:741px){
+ .in-conversation .app{max-width:none}
+ .in-conversation .content{position:relative;padding:0;height:100dvh}
+ .in-conversation .wrap{max-width:none;margin:0;min-height:0}
+ .in-conversation .top{position:absolute;top:15px;right:24px;z-index:3;margin:0;min-height:44px;gap:12px}
+ .in-conversation .top .premium,.in-conversation .top .logout-btn{margin:0}
+ .conversation-screen{border-radius:0}
+ .conversation-screen .chathead{min-height:78px;padding-right:330px}
+ .cardgrid{grid-auto-columns:min(310px,calc((100% - 16px)/2))}
+ .cardgrid .pic{height:auto;aspect-ratio:3/4}
+}
+@media(min-width:741px) and (max-width:1000px){
+ .in-conversation .top{right:14px;gap:6px}
+ .in-conversation .top .premium,.in-conversation .top .logout-btn{padding:10px;font-size:12px}
+ .conversation-screen .chathead{padding-left:14px;padding-right:250px;gap:8px}
+}
