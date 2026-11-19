@@ -1,3 +1,5 @@
+import {randomUUID} from 'node:crypto';
+import {parseProfile,PROFILE_SCHEMA_VERSION,MAX_PROFILE_TEXT} from './profile-parser.mjs';
 import {applyManualProfile} from './matchlove-profile.mjs';
 import {searchSettings} from './search-settings.mjs';
 import {ownLocation} from './matching-location.mjs';
@@ -9,40 +11,9 @@ import {loadTagVectors,generateEmbeddings,bidirectionalVectors,EMBEDDING_MODEL} 
 // MatchLove: user-authored self profile + independent partner preferences.
 // AI identifies evidence pairs; the server computes every displayed contribution and the final score.
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
-const clean=(v,max=300)=>String(v??'').trim().slice(0,max);
-const spec={
- type:'object',additionalProperties:false,required:['self','wanted'],
- properties:{
-  self:{$ref:'#/$defs/profile'},
-  wanted:{$ref:'#/$defs/profile'}
- },
- $defs:{preference:{type:'object',additionalProperties:false,required:['category','preferred','acceptable','excluded','importance','context'],properties:{category:{type:'string'},preferred:{type:'array',items:{type:'string'}},acceptable:{type:'array',items:{type:'string'}},excluded:{type:'array',items:{type:'string'}},importance:{type:'string',enum:['required','strong','normal','weak']},context:{type:'string'}}},profile:{type:'object',additionalProperties:false,required:['name','bio','age_min','age_max','location','gender','goal','interests','appearance','sexual_preferences','personality','habits','profession','preferences'],properties:{
-  name:{type:'string'},bio:{type:'string'},age_min:{type:['integer','null']},age_max:{type:['integer','null']},location:{type:'string'},gender:{type:'string'},goal:{type:'array',items:{type:'string'}},interests:{type:'array',items:{type:'string'}},appearance:{type:'array',items:{type:'string'}},sexual_preferences:{type:'array',items:{type:'string'}},habits:{type:'array',items:{type:'string'}},personality:{type:'array',items:{type:'string'}},profession:{type:'array',items:{type:'string'}},preferences:{type:'array',items:{$ref:'#/$defs/preference'}}
- }}}
-};
-function normalize(p){
- const list=a=>Array.isArray(a)?[...new Set(a.filter(v=>typeof v==='string').map(v=>clean(v,80).toLowerCase()).filter(Boolean))].slice(0,30):[];
- const n=v=>Number.isInteger(v)&&v>=18&&v<=100?v:null;
- let min=n(p?.age_min),max=n(p?.age_max);if(min!==null&&max!==null&&min>max)[min,max]=[max,min];
- return {name:clean(p?.name,60),bio:clean(p?.bio,1200),age_min:min,age_max:max,location:clean(p?.location,90).toLowerCase(),gender:clean(p?.gender,40).toLowerCase(),goal:list(p?.goal),interests:list(p?.interests),appearance:list(p?.appearance),sexual_preferences:list(p?.sexual_preferences),personality:list(p?.personality),habits:list(p?.habits),profession:list(p?.profession),preferences:(Array.isArray(p?.preferences)?p.preferences:[]).slice(0,24).map(v=>({category:clean(v?.category,40),preferred:list(v?.preferred),acceptable:list(v?.acceptable),excluded:list(v?.excluded),importance:['required','strong','normal','weak'].includes(v?.importance)?v.importance:'normal',context:clean(v?.context,160)})).filter(v=>v.category)};
-}
 export function initMatchAI(sqlite){
  sqlite.exec("CREATE TABLE IF NOT EXISTS matchlove_vectors(user TEXT PRIMARY KEY REFERENCES auth_accounts(id) ON DELETE CASCADE, source_updated TEXT NOT NULL, model TEXT NOT NULL, self_vector TEXT, wanted_vector TEXT);CREATE TABLE IF NOT EXISTS matchlove_ai_cache(viewer TEXT NOT NULL, candidate TEXT NOT NULL, viewer_updated TEXT NOT NULL, candidate_updated TEXT NOT NULL, score INTEGER NOT NULL, confidence INTEGER NOT NULL, explanation TEXT NOT NULL, evidence TEXT, scoring_version TEXT, PRIMARY KEY(viewer,candidate));CREATE TABLE IF NOT EXISTS matchlove_profiles (user TEXT PRIMARY KEY REFERENCES auth_accounts(id) ON DELETE CASCADE, source TEXT NOT NULL, parsed TEXT NOT NULL, updated TEXT NOT NULL);CREATE INDEX IF NOT EXISTS idx_matchlove_profiles_updated ON matchlove_profiles(updated);");
 }
-async function parseWithOpenAI(source,{apiKey,model='gpt-6-luna'}){
- if(!apiKey)throw Object.assign(new Error('OpenAI API не настроен на сервере'),{status:503});
- const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),25000);
- try{
- const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',signal:controller.signal,headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json'},body:JSON.stringify({
- model,store:false,max_completion_tokens:2200,
- messages:[{role:'system',content:'В self.name сохрани явно указанное имя, в wanted.name пустую строку. Для каждой стороны напиши bio: короткое живое описание в 2–3 предложения от первого лица только на основе явно сказанного, без новых фактов. Для пустой стороны bio пустая строка. Привычки habits отделяй от interests: курение, употребление алкоголя и режим жизни. Сохраняй отрицания дословно: «не курю», «не люблю пиво». «Люблю пиво» не означает частое употребление алкоголя. Не помещай один факт одновременно в habits и interests. Неоднозначные фразы не превращай в уверенные факты. Разбивай каждую категорию на отдельные короткие самостоятельные критерии, не склеивай несколько хобби в один тег. Ты извлекаешь структуру из текста пользователя сайта знакомств 18+. Улавливай градации: «больше нравятся голубые глаза, но зелёные тоже подходят» -> preferred=[голубые глаза], acceptable=[зелёные глаза], importance=strong, excluded=[]. «Только голубые» -> importance=required и excluded для явно запрещённых вариантов. В preferences для wanted сохраняй категорию (appearance, goal, interests, habits, personality, sexual_preferences, profession, location или age), предпочтительный вариант, допустимые альтернативы, явные запреты, силу и короткое исходное пояснение. Не считай альтернативу строгим запретом, не выдумывай ограничения. Для self preferences оставь пустым, если нет явно описанных собственных склонностей.  Раздели две стороны: self = только факты о самом человеке, wanted = только требования к потенциальному партнеру. Не приписывай желания на основании личных характеристик. Если человек только рассказывает о себе, оставь wanted пустым. Если только описывает желаемого партнера, оставь self пустым. Возраст клиента — возрастной диапазон из одного числа. Для неизвестных возрастов null, для неизвестных строк пустая строка, массивов пустые массивы. sexual_preferences отражает лишь явно указанные предпочтения взрослых; не делай выводов о сексуальности из фото, интересов или стереотипов. location = явно указанное место, gender = явно указанный пол без предположений. Никаких дополнительных свойств.'},{role:'user',content:source}],
- response_format:{type:'json_schema',json_schema:{name:'matchlove_profile',strict:true,schema:spec}}})});
- if(!r.ok){const msg=await r.text();throw Object.assign(new Error('OpenAI вернул ошибку ('+r.status+')'),{status:502,detail:msg.slice(0,200)})}
- const data=await r.json(),text=data.choices?.[0]?.message?.content;if(!text)throw new Error('OpenAI не вернул структурированный профиль');
- const parsed=JSON.parse(text);return {profileSchemaVersion:2,self:normalize(parsed.self),wanted:normalize(parsed.wanted)};
- }finally{clearTimeout(timeout)}
-}
-
 const AI_BATCH=5;
 const scoreSchema={type:'object',additionalProperties:false,required:['pairs'],properties:{pairs:{type:'array',items:{type:'object',additionalProperties:false,required:['id','matches'],properties:{id:{type:'string'},matches:{type:'array',items:{type:'object',additionalProperties:false,required:['category','direction','wantedEvidence','candidateEvidence','agreement','conflict'],properties:{category:{type:'string',enum:SEMANTIC_FIELDS},direction:{type:'string',enum:['viewer']},wantedEvidence:{type:'string'},candidateEvidence:{type:'string'},agreement:{type:'number',minimum:0,maximum:1},conflict:{type:'boolean'}}}}}}}}};
 function safeParse(text){try{return JSON.parse(text)}catch{return null}}
@@ -70,13 +41,17 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model,candidat
  if(!userId)return json({error:'Необходимо войти в аккаунт'},401);
  if(request.method==='POST'){
   if(request.headers.get('origin')!==new URL(request.url).origin)return json({error:'Недопустимый источник запроса'},403);
-  const body=await request.json().catch(()=>({}));const source=typeof body.text==='string'?body.text.slice(0,4000):'';
+  const body=await request.json().catch(()=>({}));const source=typeof body.text==='string'?body.text:'';
+  if(source.length>MAX_PROFILE_TEXT)return json({error:'Описание получилось слишком длинным. Оставь до 12 000 символов — текст в поле не потеряется.',code:'PROFILE_TOO_LONG'},400);
   if(source.trim().length<100)return json({error:'Напиши о себе или о том, кого ищешь (не менее 100 символов)'},400);
   if(!body.confirmAdult)return json({error:'Доступно только совершеннолетним'},400);
+  const requestId=randomUUID(),started=Date.now();let stage='load_profile';
   try{
    const existing=sqlite.prepare('SELECT source,parsed FROM matchlove_profiles WHERE user=?').get(userId);
    const cached=existing?JSON.parse(existing.parsed):null;
-   let parsed=existing?.source===source&&cached?.profileSchemaVersion===2&&typeof cached?.genderPreferenceExplicit==='boolean'&&Array.isArray(cached?.self?.habits)&&typeof cached?.self?.bio==='string'?cached:await parseWithOpenAI(source,{apiKey,model});
+   stage='parse_profile';
+   let parsed=existing?.source===source&&cached?.profileSchemaVersion===PROFILE_SCHEMA_VERSION&&typeof cached?.genderPreferenceExplicit==='boolean'&&Array.isArray(cached?.self?.habits)?cached:await parseProfile(source,{apiKey,model,requestId});
+   stage='apply_profile';
    const account=sqlite.prepare('SELECT gender FROM auth_accounts WHERE id=?').get(userId);
    parsed={...parsed,genderPreferenceExplicit:parsed.genderPreferenceExplicit??!!parsed.wanted?.gender};
    parsed=applyManualProfile(sqlite,userId,parsed);
@@ -88,10 +63,11 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model,candidat
    const needsVectors=needsTextUpdate||!previousVectors||previousVectors.source_updated!==currentUpdated||previousVectors.model!==embeddingModel;
    // Existing records created before embeddings are backfilled on the next search, without rerunning GPT parsing.
    let embedded=null;
-   if(needsVectors){try{embedded=await generateEmbeddings(parsed,{apiKey,model:embeddingModel})}catch(error){console.error('MatchLove embedding unavailable:',error.name)}}
+   if(needsVectors){const embeddingStarted=Date.now();try{embedded=await generateEmbeddings(parsed,{apiKey,model:embeddingModel,timeoutMs:10000});}catch(error){console.error(JSON.stringify({event:'matchlove_profile_embedding_failed',requestId,errorCode:error.code||error.name}));}finally{console.info(JSON.stringify({event:'matchlove_profile_embedding',requestId,available:!!embedded,durationMs:Date.now()-embeddingStarted}));}}
    // Embedding requests yield to other sessions; reapply any manual edits made while waiting.
    const latest=applyGenderDefaults(applyManualProfile(sqlite,userId,parsed),sqlite.prepare('SELECT gender FROM auth_accounts WHERE id=?').get(userId)?.gender);
    if(JSON.stringify(latest)!==JSON.stringify(parsed)){parsed=latest;embedded=null;}
+   stage='save_profile';
    if(needsTextUpdate){
     // Text changes always create a new profile revision; identical input keeps the old revision and GPT cache.
     const updated=new Date().toISOString();
@@ -105,11 +81,18 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model,candidat
    }else if(needsVectors&&embedded){
     sqlite.prepare('INSERT INTO matchlove_vectors(user,source_updated,model,self_vector,wanted_vector) VALUES(?,?,?,?,?) ON CONFLICT(user) DO UPDATE SET source_updated=excluded.source_updated,model=excluded.model,self_vector=excluded.self_vector,wanted_vector=excluded.wanted_vector').run(userId,currentUpdated,embeddingModel,embedded.self?JSON.stringify(embedded.self):null,embedded.wanted?JSON.stringify(embedded.wanted):null);
    }
-   updateTagUsage(sqlite,userId,parsed);
+   try{updateTagUsage(sqlite,userId,parsed);}catch(error){console.error(JSON.stringify({event:'matchlove_tag_usage_failed',requestId,errorCode:error.code||error.name}));}
+   console.info(JSON.stringify({event:'matchlove_profile_saved',requestId,durationMs:Date.now()-started}));
    return json({ok:true,profile:parsed});
-  }catch(e){return json({error:e.message==='OpenAI API не настроен на сервере'?e.message:'Не удалось разобрать текст через OpenAI'},e.status||502)}
+  }catch(error){
+   const parsing=stage==='parse_profile',code=parsing?(error.code||'PROFILE_UNAVAILABLE'):'PROFILE_SAVE_FAILED';
+   console.error(JSON.stringify({event:'matchlove_search_failed',requestId,stage,errorCode:code,causeCode:error.code||error.name,upstreamCode:error.upstreamCode,upstreamStatus:error.upstreamStatus}));
+   const message=code==='PROFILE_TIMEOUT'?'Подбор занял больше времени, чем ожидалось. Попробуй ещё раз — описание осталось в поле.':code==='PROFILE_REJECTED'?'Не получилось составить анкету по этому описанию. Попробуй переформулировать его.':parsing?'Упс, поиск временно не ответил. Попробуй ещё раз — описание осталось в поле.':'Не получилось сохранить анкету. Попробуй ещё раз — описание осталось в поле.';
+   return json({error:message,code,requestId,retryable:error.retryable!==false},parsing?(error.status||503):500);
+  }
  }
  if(request.method==='GET'){
+  const requestId=randomUUID(),started=Date.now();
   const mine=sqlite.prepare('SELECT source,parsed,updated FROM matchlove_profiles WHERE user=?').get(userId);
   if(!mine)return json({results:[],saved:false});
   const myself={...applyGenderDefaults(JSON.parse(mine.parsed),sqlite.prepare('SELECT gender FROM auth_accounts WHERE id=?').get(userId)?.gender),matchingLocation:ownLocation(sqlite,userId)};
@@ -117,7 +100,9 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model,candidat
   let rows=sqlite.prepare("SELECT m.user,m.parsed,m.updated,v.source_updated AS vector_updated,v.model AS vector_model,v.self_vector,v.wanted_vector,p.name,p.city,p.birthdate,p.gender,a.gender AS account_gender,l.city AS location_city,l.latitude,l.longitude FROM matchlove_profiles m LEFT JOIN auth_accounts a ON a.id=m.user LEFT JOIN matchlove_locations l ON l.user=m.user LEFT JOIN matchlove_vectors v ON v.user=m.user LEFT JOIN profiles p ON p.id=m.user WHERE m.user<>? AND COALESCE(p.paused,0)=0 AND NOT EXISTS(SELECT 1 FROM blocks WHERE (sender=? AND recipient=m.user) OR (recipient=? AND sender=m.user))").all(userId,userId,userId);
   if(candidateIds){const ids=new Set(candidateIds);rows=rows.filter(r=>ids.has(r.user));}
   const candidateProfiles=rows.flatMap(r=>{try{return [JSON.parse(r.parsed)]}catch{return []}});
+  const embeddingStarted=Date.now();
   const tagVectors=await loadTagVectors(sqlite,[myself,...candidateProfiles],{apiKey,model:process.env.MATCHLOVE_EMBEDDING_MODEL||EMBEDDING_MODEL});
+  const embeddingMs=Date.now()-embeddingStarted;
   const results=[],toScore=[];
   const myVectorRow=sqlite.prepare('SELECT * FROM matchlove_vectors WHERE user=?').get(userId);
   const embModel=process.env.MATCHLOVE_EMBEDDING_MODEL||EMBEDDING_MODEL;
@@ -139,6 +124,7 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model,candidat
   // Embeddings pre-rank candidates for semantic AI comparison, without excluding any eligible profiles from results.
   toScore.sort((a,b)=>(b.vectorRelevance??-1)-(a.vectorRelevance??-1)||b.result.score-a.result.score);
   const rerank=toScore.slice(0,Math.min(45,toScore.length));
+  const comparisonStarted=Date.now();
   if(apiKey){const batches=[];for(let i=0;i<rerank.length;i+=AI_BATCH)batches.push(rerank.slice(i,i+AI_BATCH));
    async function evaluate(batch){try{const semantic=await interpretPairsWithOpenAI(myself,batch,{apiKey,model:model||'gpt-6-luna'});
     for(const c of batch){const evidence=semantic.get(c.id);if(!evidence)continue;const scored=scoreEvidence(myself,c.profile,evidence,tagVectors);if(!scored)continue;Object.assign(c.result,scored,{aiEvaluated:true});sqlite.prepare('INSERT OR REPLACE INTO matchlove_ai_cache(viewer,candidate,viewer_updated,candidate_updated,score,confidence,explanation,evidence,scoring_version) VALUES(?,?,?,?,?,?,?,?,?)').run(userId,c.id,mine.updated,c.updated,scored.score,0,'',JSON.stringify(evidence),SCORING_VERSION);}
@@ -148,6 +134,7 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model,candidat
   results.sort((a,b)=>b.score-a.score||((b.vectorRelevance??-1)-(a.vectorRelevance??-1))||(b.location==='same')-(a.location==='same')||a.name.localeCompare(b.name));
   const hidden=!includeHabitConflicts&&searchSettings(sqlite,userId).hideHabitConflicts;
   const visible=hidden?results.filter(p=>!p.conflicts.some(f=>f.category==='habits')):results;
+  console.info(JSON.stringify({event:'matchlove_match_search',requestId,candidates:rows.length,results:visible.length,embeddingMs,comparisonMs:Date.now()-comparisonStarted,durationMs:Date.now()-started}));
   return json({saved:true,results:visible,total:visible.length,hiddenCount:results.length-visible.length,source:mine.source});
  }
  return json({error:'Метод не поддерживается'},405);

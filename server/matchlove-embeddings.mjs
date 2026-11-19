@@ -30,11 +30,11 @@ export function bidirectionalVectors(viewer,candidate){
  if(!values.length&&viewer.self&&candidate.self){const v=cosine(viewer.self,candidate.self);if(v!==null)return v*.65}
  return values.length?values.reduce((a,b)=>a+b,0)/values.length:null;
 }
-export async function generateEmbeddings(parsed,{apiKey,model=EMBEDDING_MODEL}){
+export async function generateEmbeddings(parsed,{apiKey,model=EMBEDDING_MODEL,timeoutMs=25000}){
  if(!apiKey)return null;
  const self=describe(parsed.self),wanted=describe(parsed.wanted);
  const inputs=[self,wanted].filter(Boolean);if(!inputs.length)return {self:null,wanted:null};
- const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),25000);
+ const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),timeoutMs);
  try{
   const response=await fetch('https://api.openai.com/v1/embeddings',{method:'POST',signal:abort.signal,headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json'},body:JSON.stringify({model,dimensions:EMBEDDING_DIMENSIONS,encoding_format:'float',input:inputs})});
   if(!response.ok)throw Error('Embedding API error '+response.status);
