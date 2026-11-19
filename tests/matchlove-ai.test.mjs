@@ -5,7 +5,7 @@ const p=(overrides={})=>({age_min:null,age_max:null,location:'',gender:'',goal:[
 test('one sided wishes match the other person self description',()=>{
  const man={self:p({age_min:30,age_max:30,gender:'мужчина',appearance:['голубые глаза','светлые волосы']}),wanted:p()};
  const woman={self:p({age_min:26,age_max:26,gender:'женщина'}),wanted:p({age_min:27,age_max:40,gender:'мужчина',appearance:['голубые глаза','светлые волосы']})};
- const result=rankMatch(man,woman);assert.ok(result);assert.equal(result.mutual,false);assert.equal(result.score,34.82);assert.equal(Math.round(result.matches.reduce((n,m)=>n+m.points,0)*100)/100,result.score);
+ const result=rankMatch(woman,man);assert.ok(result);assert.equal(result.mutual,false);assert.equal(result.score,34.82);assert.equal(rankMatch(man,woman).score,24.92);assert.equal(Math.round(result.matches.reduce((n,m)=>n+m.points,0)*100)/100,result.score);
 });
 test('explicit age bounds exclude ineligible candidate',()=>{
  const a={self:p({age_min:20,age_max:20}),wanted:p({age_min:25,age_max:35})};

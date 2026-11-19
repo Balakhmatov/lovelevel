@@ -60,3 +60,27 @@ test('Related leisure interests do not invent shared television or dancing activ
  const e={category:'interests',direction:'viewer',wantedEvidence:'танцы',candidateEvidence:'музыка',agreement:.6};
  assert.equal(scoreEvidence(a,b,[e],vectors).score,1);
 });
+test('Each viewer gets their own percentage and only their own positive criteria',async()=>{
+ const {mark,alice}=await import('./fixtures/directional-profiles.mjs');
+ const forward=scoreEvidence(mark,alice),reverse=scoreEvidence(alice,mark);
+ assert.equal(forward.score,82.2);assert.equal(reverse.score,73);assert.equal(sum(forward),82.2);assert.equal(sum(reverse),73);
+ assert.ok(!forward.matches.some(m=>m.category==='habits'&&m.label==='Не курит'));assert.ok(reverse.matches.some(m=>m.label==='Не курит'&&m.points===1.78));
+ assert.deepEqual(forward.conflicts.map(f=>f.label),['Курит']);assert.deepEqual(reverse.conflicts,[]);
+ const otherWishes=structuredClone(alice);otherWishes.wanted={age_min:99,age_max:99,interests:['танцы']};assert.equal(scoreEvidence(mark,otherWishes).score,82.2);
+});
+test('Known habit synonyms agree, while absence and beer preferences do not invent conflicts',()=>{
+ const [a,b]=pair({habits:['некурящий']},{habits:['не курю']});assert.equal(scoreEvidence(a,b).score,4.56);
+ b.self.habits=[];assert.deepEqual(scoreEvidence(a,b).conflicts,[]);
+ a.wanted.habits=['не употребляю алкоголь'];b.self.habits=['люблю пиво'];assert.deepEqual(scoreEvidence(a,b).conflicts,[]);
+ b.self.habits=['иногда употребляю алкоголь'];assert.equal(scoreEvidence(a,b).conflicts[0].label,'Иногда употребляет алкоголь');
+});
+test('Semantic conflicts require real viewer wishes, real candidate facts and explicit contradiction',()=>{
+ const [a,b]=pair({goal:['серьёзные отношения']},{goal:['встречи без обязательств']});
+ const evidence={category:'goal',direction:'viewer',wantedEvidence:'серьёзные отношения',candidateEvidence:'встречи без обязательств',agreement:0,conflict:true};
+ assert.equal(scoreEvidence(a,b,[evidence]).conflicts.length,1);
+ for(const invalid of [{...evidence,direction:'candidate'},{...evidence,candidateEvidence:'выдуманный факт'},{...evidence,wantedEvidence:'выдуманное пожелание'},{...evidence,conflict:false}])assert.equal(scoreEvidence(a,b,[invalid]).conflicts.length,0);
+});
+test('Explicitly excluded facts never earn fallback points just because the viewer also has them',()=>{
+ const [a,b]=pair({}, {habits:['курю']});a.self.habits=['курю'];a.wanted.preferences=[{category:'habits',preferred:[],excluded:['курю']}];
+ const result=scoreEvidence(a,b);assert.equal(result.score,1);assert.equal(result.conflicts[0].label,'Курит');assert.ok(!result.matches.some(m=>m.category==='habits'));
+});

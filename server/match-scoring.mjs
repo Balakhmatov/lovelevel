@@ -1,6 +1,7 @@
 import {cosine,tagKey} from './matchlove-embeddings.mjs';
+import {findConflicts,habitLabel,habitState} from './match-conflicts.mjs';
 import {locationMatch} from './matching-location.mjs';
-export const SCORING_VERSION='tags-v4-confirmed-activities';
+export const SCORING_VERSION='viewer-v5-conflicts';
 // 1 percentage point is reserved for a confirmed gender fit; 10 points are reserved for location, and the remaining 89 follow these proportions.
 // Missing facts never redistribute their unused category budget to the known categories.
 export const WEIGHTS={age:28,goal:24,interests:20,appearance:10,sexual_preferences:7,personality:4,habits:4,profession:3};
@@ -24,7 +25,10 @@ function finish(raw){
  return {matches,score:target/100};
 }
 export function scoreEvidence(a,b,evidence=[],vectors=new Map()){
+ const conflicts=findConflicts(a,b,evidence);
+ const habitEquivalent=(category,left,right)=>{if(category!=='habits')return false;const x=habitState(left),y=habitState(right);return !!x&&!!y&&x.kind===y.kind&&x.value===y.value;};
  const similarity=(category,left,right)=>{
+  if(habitEquivalent(category,left,right))return 1;
   const lexicalScore=lexical(left,right);
   // Negated statements require explicit semantic confirmation; vector proximity alone cannot prove agreement.
   if(negative(left)||negative(right))return norm(left)===norm(right)?1:0;
@@ -34,18 +38,19 @@ export function scoreEvidence(a,b,evidence=[],vectors=new Map()){
  const agreementFor=(category,direction,label,actual)=>{
   let best=0;
   for(const fact of actual){
+   if(conflicts.some(f=>f.category===category&&norm(f.evidence)===norm(fact)))continue;
    const similarityValue=similarity(category,label,fact);
    // Broad thematic proximity is retrieval evidence, not a confirmed shared activity.
-   let value=norm(label)===norm(fact)?1:0;
+   let value=norm(label)===norm(fact)||habitEquivalent(category,label,fact)?1:0;
    const reviews=evidence.filter(e=>e?.direction===direction&&e.category===category&&norm(e.wantedEvidence)===norm(label)&&norm(e.candidateEvidence)===norm(fact)&&Number.isFinite(e.agreement)&&e.agreement>=0&&e.agreement<=1);
-   if(negative(label)!==negative(fact))continue;
-   if(reviews.length){const review=Math.min(...reviews.map(e=>e.agreement));value=review>=.8?(vectors.has(tagKey(category,label))&&vectors.has(tagKey(category,fact))?Math.min(similarityValue,review):review):0;}
+   if(negative(label)!==negative(fact)&&!habitEquivalent(category,label,fact))continue;
+   if(reviews.length){const review=reviews.some(e=>e.conflict===true)?0:Math.min(...reviews.map(e=>e.agreement));value=review>=.8?(vectors.has(tagKey(category,label))&&vectors.has(tagKey(category,fact))?Math.min(similarityValue,review):review):0;}
    const rejected=evidence.some(e=>e?.direction===direction&&e.category===category&&norm(e.wantedEvidence)===norm(label)&&e.agreement===0&&!e.candidateEvidence);
    if(!rejected)best=Math.max(best,value);
   }
   return best;
  };
- const directions=[{key:'viewer',wanted:a.wanted||{},self:b.self||{}},{key:'candidate',wanted:b.wanted||{},self:a.self||{}}];
+ const directions=[{key:'viewer',wanted:a.wanted||{},self:b.self||{}}];
  if(directions.some(d=>genderFit(d.wanted,d.self)===false||ageFit(d.wanted,d.self)===false))return null;
  const raw=[];if(directions.some(d=>genderFit(d.wanted,d.self)===true))raw.push({category:'gender',label:'Подходящий пол',units:100});
  for(const [category,weight] of Object.entries(WEIGHTS)){
@@ -58,18 +63,18 @@ export function scoreEvidence(a,b,evidence=[],vectors=new Map()){
   const requested=directions.filter(d=>criteria(d.wanted,category).length);
   if(requested.length){for(const d of requested){const wanted=criteria(d.wanted,category),actual=criteria(d.self,category),denominator=wanted.reduce((sum,x)=>sum+importance(d.wanted,category,x),0);
    for(const wantedLabel of wanted){const agreement=agreementFor(category,d.key,wantedLabel,actual);
-    if(agreement>0&&actual.length)raw.push({category,label:wantedLabel.slice(0,100),units:budget/requested.length*importance(d.wanted,category,wantedLabel)/denominator*agreement});
+    if(agreement>0&&actual.length)raw.push({category,label:(category==='habits'?habitLabel(wantedLabel):wantedLabel).slice(0,100),units:budget/requested.length*importance(d.wanted,category,wantedLabel)/denominator*agreement});
    }
   }}else{
-   // Shared self-described facts are evidence only when neither person sets a preference in this category.
+   // When the viewer has no preference in this category, use their own self-described facts.
    const mine=criteria(a.self||{},category),other=criteria(b.self||{},category);const denominator=mine.length;
-   for(const label of mine){const agreement=agreementFor(category,'viewer',label,other);if(agreement>0)raw.push({category,label:label.slice(0,100),units:budget/denominator*agreement});}
+   for(const label of mine){const agreement=agreementFor(category,'viewer',label,other);if(agreement>0)raw.push({category,label:(category==='habits'?habitLabel(label):label).slice(0,100),units:budget/denominator*agreement});}
   }
  }
  const proximity=locationMatch(a,b);if(proximity.units>0)raw.push({category:'location',label:proximity.label,units:proximity.units});
  const result=finish(raw);
- const knownDirections=directions.filter(d=>Object.keys(WEIGHTS).some(k=>k==='age'?(d.wanted.age_min!=null||d.wanted.age_max!=null):criteria(d.wanted,k).length));
- return {...result,distanceKm:proximity.distanceKm,confidence:0,mutual:knownDirections.length===2,location:proximity.location,explanation:'',reasons:result.matches.map(m=>m.label)};
+ const knownDirections=[{wanted:a.wanted||{}},{wanted:b.wanted||{}}].filter(d=>Object.keys(WEIGHTS).some(k=>k==='age'?(d.wanted.age_min!=null||d.wanted.age_max!=null):criteria(d.wanted,k).length));
+ return {...result,conflicts,distanceKm:proximity.distanceKm,confidence:0,mutual:knownDirections.length===2,location:proximity.location,explanation:'',reasons:result.matches.map(m=>m.label)};
 }
 export function rankMatch(a,b){return scoreEvidence(a,b);}
 export function semanticProfile(p){return {self:p.self,wanted:p.wanted,criteria:Object.fromEntries(SEMANTIC_FIELDS.map(k=>[k,criteria(p.wanted||{},k).length?criteria(p.wanted||{},k):criteria(p.self||{},k)]))};}

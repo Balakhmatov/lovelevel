@@ -1,3 +1,6 @@
+import {findConflicts} from './match-conflicts.mjs';
+import {SCORING_VERSION} from './match-scoring.mjs';
+import {searchSettings} from './search-settings.mjs';
 import {randomUUID} from 'node:crypto';
 import {updateTagUsage} from './tag-suggestions.mjs';
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
@@ -29,13 +32,14 @@ export async function handleProfile(request,{sqlite:db,userId}){
  const url=new URL(request.url),target=url.searchParams.get('user')||userId;
  if(!canViewProfile(db,userId,target))return json({error:'Анкета недоступна'},404);
  if(request.method==='GET'){
-  const row=db.prepare('SELECT parsed FROM matchlove_profiles WHERE user=?').get(target);
+  const row=db.prepare('SELECT parsed,updated FROM matchlove_profiles WHERE user=?').get(target);
   const classic=db.prepare('SELECT name,city FROM profiles WHERE id=?').get(target),gender=db.prepare('SELECT gender FROM auth_accounts WHERE id=?').get(target)?.gender;
   const profile=mergeManualProfile(row?JSON.parse(row.parsed):{});profile.self.gender=gender||profile.self.gender;
   const photos=db.prepare('SELECT id,is_main FROM matchlove_photos WHERE user=? ORDER BY is_main DESC,created,id').all(target).map(p=>({id:p.id,main:!!p.is_main,url:'/api/profile-photo?user='+encodeURIComponent(target)+'&id='+encodeURIComponent(p.id)}));
   const own=target===userId;
   const locked=own?JSON.parse(db.prepare('SELECT data FROM matchlove_profile_overrides WHERE user=?').get(target)?.data||'{}'):undefined;
-  return json({id:target,own,name:profile.self.name||classic?.name||'Участник '+target.slice(0,4),city:profile.self.location||classic?.city||'',profile,photos,...(own?{locked}:{})});
+  let conflicts=[];if(!own){const mine=db.prepare('SELECT parsed,updated FROM matchlove_profiles WHERE user=?').get(userId);if(mine){let evidence=[];const cached=db.prepare('SELECT evidence FROM matchlove_ai_cache WHERE viewer=? AND candidate=? AND viewer_updated=? AND candidate_updated=? AND scoring_version=?').get(userId,target,mine.updated,row.updated,SCORING_VERSION);try{const items=JSON.parse(cached?.evidence||'[]');if(Array.isArray(items))evidence=items;}catch{}conflicts=findConflicts(JSON.parse(mine.parsed),profile,evidence);}}
+  return json({id:target,own,conflicts,name:profile.self.name||classic?.name||'Участник '+target.slice(0,4),city:profile.self.location||classic?.city||'',profile,photos,...(own?{locked,searchSettings:searchSettings(db,userId)}:{})});
  }
  if(request.method!=='PATCH')return json({error:'Метод недоступен'},405);
  if(target!==userId)return json({error:'Можно редактировать только свою анкету'},403);
