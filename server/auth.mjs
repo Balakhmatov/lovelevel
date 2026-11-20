@@ -1,3 +1,4 @@
+import {accountBanned} from './account-bans.mjs';
 import {createTelegramAuth} from './telegram.mjs';
 import {randomBytes,randomUUID,createHash,scrypt as rawScrypt,timingSafeEqual} from 'node:crypto';
 import {promisify} from 'node:util';
@@ -22,7 +23,7 @@ export function createAuth(sqlite,{origin,secure=true,registration=true,inviteCo
  function consume(key,limit,windowMs){const bucket=Math.floor(now()/windowMs);sqlite.prepare('DELETE FROM auth_limits WHERE expires<?').run(now());sqlite.prepare('INSERT INTO auth_limits(key,bucket,count,expires) VALUES(?,?,1,?) ON CONFLICT(key,bucket) DO UPDATE SET count=count+1').run(digest(key),bucket,now()+windowMs*2);return sqlite.prepare('SELECT count FROM auth_limits WHERE key=? AND bucket=?').get(digest(key),bucket).count<=limit;}
  function issueSession(account){sqlite.prepare('DELETE FROM auth_sessions WHERE expires<=?').run(now());const token=randomBytes(32).toString('hex');sqlite.prepare('INSERT INTO auth_sessions(token_hash,account,expires,created) VALUES(?,?,?,?)').run(digest(token),account,now()+sessionAge,now());return {cookie:cookie(token),token};}
  function newSession(account){return issueSession(account).cookie;}
- function signedIn(account,body,status=200){const session=issueSession(account);return json({ok:true,...(body.transport==='miniapp'?{sessionToken:session.token}:{})},status,{'Set-Cookie':session.cookie});}
+ function signedIn(account,body,status=200){if(accountBanned(sqlite,account))return json({error:'Аккаунт заблокирован администратором. Обратитесь в поддержку.'},403);const session=issueSession(account);return json({ok:true,...(body.transport==='miniapp'?{sessionToken:session.token}:{})},status,{'Set-Cookie':session.cookie});}
  const telegram=createTelegramAuth(sqlite,{current,newSession,issueSession,consume},{origin,secure,registration,inviteCode,botToken:telegramBotToken,botUsername:telegramBotUsername,now});
  async function route(request,ip){const url=new URL(request.url),path=url.pathname;
   if(path==='/api/auth/config'&&request.method==='GET')return json({registration,inviteRequired:!!inviteCode,provider:'password',telegram:{enabled:telegram.enabled,botUsername:telegram.username,miniApp:true}});

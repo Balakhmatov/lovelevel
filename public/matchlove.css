@@ -214,3 +214,5 @@ html.in-conversation{background:#17131a;scrollbar-gutter:auto}
 .chatlist-heading{font-size:24px;margin:20px 0 16px;letter-spacing:-.03em}
 
 .admin-person-link{color:var(--green);background:none;padding:4px 0;text-align:left;overflow-wrap:anywhere}.admin-person-link:hover{text-decoration:underline}.admin-user-search{display:flex;gap:10px;margin:18px 0}.admin-user-search input{flex:1;min-width:0}.admin-user-search .btn{padding:12px 18px}
+
+#admin-ban-form label{display:grid;gap:8px}.admin-ban-button{font-size:12px;padding:9px 12px;margin:3px;color:var(--pink)}

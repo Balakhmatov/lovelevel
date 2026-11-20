@@ -1,3 +1,4 @@
+import {accountBanned,handleAccountBan} from './account-bans.mjs';
 import {handleNotifications} from './notifications.mjs';
 import {handleEmailSettings,startEmailWorker} from './email-notifications.mjs';
 import {handleAnalytics,recordProductEvent} from './admin-analytics.mjs';
@@ -69,6 +70,7 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
    const headers=new Headers();for(const [key,value] of Object.entries(req.headers)){if(value!==undefined&&!key.toLowerCase().startsWith('oai-')&&!key.toLowerCase().startsWith('x-lovelevel-'))headers.set(key,Array.isArray(value)?value.join(', '):value);}
    const method=req.method;let request=new Request(path,{method,headers,body:['GET','HEAD'].includes(method)?undefined:Buffer.concat(chunks)});
    const identity=auth.current(request);
+   if(identity&&path.pathname.startsWith('/api/')&&accountBanned(sqlite,identity.id)){res.writeHead(403,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'Аккаунт заблокирован администратором. Обратитесь в поддержку.'}));return;}
    if(identity)headers.set('x-lovelevel-user-id',identity.id);
    let processedForm=null;
    if(['/api/upload','/api/chat-upload'].includes(path.pathname)&&method==='POST'&&identity&&headers.get('origin')===origin){
@@ -83,6 +85,7 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
    else if(['/api/search-photo','/api/search-photo-info','/api/profile-photo'].includes(path.pathname))response=await handleSearchPhoto(request,{sqlite,userId:identity?.id});
    else if(['/api/analytics','/api/admin/analytics','/api/admin/users'].includes(path.pathname))response=await handleAnalytics(request,{sqlite,userId:identity?.id,adminIds,ip});
    else if(['/api/block','/api/unblock','/api/blocks','/api/report'].includes(path.pathname))response=await handleModeration(request,{sqlite,userId:identity?.id});
+   else if(path.pathname==='/api/admin/ban')response=await handleAccountBan(request,{sqlite,userId:identity?.id,adminIds});
    else if(path.pathname==='/api/ml-notifications')response=await handleNotifications(request,{sqlite,userId:identity?.id,adminIds});
    else if(path.pathname==='/api/ml-email-settings')response=await handleEmailSettings(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/ml-profile')response=await handleProfile(request,{sqlite,userId:identity?.id});

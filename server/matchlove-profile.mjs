@@ -16,7 +16,7 @@ export function mergeManualProfile(parsed,overrides={}){
  return result;
 }
 export function applyManualProfile(db,user,parsed){const row=db.prepare('SELECT data FROM matchlove_profile_overrides WHERE user=?').get(user);return mergeManualProfile(parsed,row?JSON.parse(row.data):{});}
-export function canViewProfile(db,viewer,target){return target===viewer||!!db.prepare('SELECT 1 FROM matchlove_profiles WHERE user=?').get(target)&&!db.prepare('SELECT 1 FROM profiles WHERE id=? AND paused=1').get(target)&&!db.prepare('SELECT 1 FROM blocks WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)').get(viewer,target,target,viewer);}
+export function canViewProfile(db,viewer,target){return target===viewer||!db.prepare('SELECT 1 FROM matchlove_account_bans WHERE user=?').get(target)&&!!db.prepare('SELECT 1 FROM matchlove_profiles WHERE user=?').get(target)&&!db.prepare('SELECT 1 FROM profiles WHERE id=? AND paused=1').get(target)&&!db.prepare('SELECT 1 FROM blocks WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)').get(viewer,target,target,viewer);}
 function validate(side,patch){
  if(!patch||typeof patch!=='object'||Array.isArray(patch))throw Error('Некорректные поля анкеты');
  const result={};

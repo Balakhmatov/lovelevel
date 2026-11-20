@@ -1,6 +1,6 @@
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 const isAdmin=(id,ids)=>String(ids||'').split(',').map(s=>s.trim()).includes(id);
-const allowed="NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.sender=? AND b.recipient=x.sender) OR (b.sender=x.sender AND b.recipient=?))";
+const allowed="NOT EXISTS(SELECT 1 FROM matchlove_account_bans ban WHERE ban.user=x.sender) AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.sender=? AND b.recipient=x.sender) OR (b.sender=x.sender AND b.recipient=?))";
 export function notifications(db,user,admin=false){
  const likes=db.prepare(`SELECT x.sender||':'||x.created AS item FROM likes x WHERE x.recipient=? AND ${allowed} AND NOT EXISTS(SELECT 1 FROM matchlove_notification_reads r WHERE r.user=? AND r.kind='likes' AND r.item=x.sender||':'||x.created)`).all(user,user,user,user);
  const rows=db.prepare(`SELECT x.sender,COUNT(*) AS n FROM messages x WHERE x.recipient=? AND ${allowed} AND EXISTS(SELECT 1 FROM likes a JOIN likes b ON b.sender=a.recipient AND b.recipient=a.sender WHERE a.sender=? AND a.recipient=x.sender) AND NOT EXISTS(SELECT 1 FROM matchlove_notification_reads r WHERE r.user=? AND r.kind='messages' AND r.item=x.id) GROUP BY x.sender`).all(user,user,user,user,user);
