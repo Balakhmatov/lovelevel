@@ -206,3 +206,5 @@ html.in-conversation{background:#17131a;scrollbar-gutter:auto}
 #auth>.btn{padding-left:12px;padding-right:12px}
 
 .page-head .premium-coming-soon{font-size:clamp(32px,5vw,48px);font-weight:800;line-height:1.2;color:var(--green);margin-top:24px}
+
+.utility-dialog .login .panel{background:transparent;box-shadow:none;border:0;border-radius:0;padding:0}
