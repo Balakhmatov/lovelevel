@@ -26,13 +26,13 @@ test('Guest search opens auth for empty, one-character, short and oversized text
  }
 });
 test('After successful registration the same short draft hits the existing minimum and stays available',async()=>{
- const view=app('я');await view.run("S.authMode='register';search()");
+ const view=app('я');await view.run("S.authMode='register';S.photos=[{id:'photo',main:true}];search()");
  const submit=view.listeners.submit.find(fn=>fn.toString().includes("e.target.id==='auth'"));
  await submit({target:{id:'auth'},preventDefault(){}});
  assert.equal(view.modal,null);assert.equal(view.run('S.logged'),true);assert.equal(view.run('S.query'),'я');assert.equal(view.run('S.page'),'home');assert(view.notices.some(text=>text.includes('100')));assert(!view.requests.includes('ai-match'));assert(view.run('pageHome()').includes('minlength="100"'));
 });
 test('A sufficiently detailed guest draft resumes matching after registration',async()=>{
- const view=app('Описание интересов и пожеланий. '.repeat(6));await view.run("S.authMode='register';search()");
+ const view=app('Описание интересов и пожеланий. '.repeat(6));await view.run("S.authMode='register';S.photos=[{id:'photo',main:true}];search()");
  const submit=view.listeners.submit.find(fn=>fn.toString().includes("e.target.id==='auth'"));
  await submit({target:{id:'auth'},preventDefault(){}});
  assert.equal(view.modal,null);assert.equal(view.run('S.page'),'results');assert.equal(view.requests.filter(path=>path==='ai-match').length,2);

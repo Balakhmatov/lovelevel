@@ -12,7 +12,7 @@ test('Directional scores survive likes; confirmed habit conflicts stay visible u
  try{
  const users=[];for(const [i,profile] of [mark,alice].entries()){
   const r=await call('/api/auth/register',{method:'POST',body:{email:'direction'+i+'@test.example',password:'directional-search-password',gender:profile.self.gender,adult:true,terms:true}});assert.equal(r.status,201);const cookie=r.headers.get('set-cookie').split(';')[0],id=app.sqlite.prepare('SELECT id FROM auth_accounts WHERE email=?').get('direction'+i+'@test.example').id;
-  app.sqlite.prepare('INSERT INTO matchlove_profiles VALUES(?,?,?,?)').run(id,'Saved original description '.repeat(5),JSON.stringify(profile),'first');users.push({id,cookie});
+  app.sqlite.prepare('INSERT INTO matchlove_profiles VALUES(?,?,?,?)').run(id,'Saved original description '.repeat(5),JSON.stringify(profile),'first');app.sqlite.prepare('INSERT INTO matchlove_photos(id,user,mime,data,is_main,created) VALUES(?,?,?,?,?,?)').run('photo-'+i,id,'image/webp',Buffer.from('test-photo'),1,'first');users.push({id,cookie});
  }
  const [a,b]=users;
  let results=await(await call('/api/ai-match',{cookie:a.cookie})).json();assert.equal(results.results[0].score,82.2);assert.equal(results.results[0].conflicts[0].label,'Курит');

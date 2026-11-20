@@ -93,7 +93,7 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
    else if(path.pathname==='/api/location')response=await handleLocation(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/tag-suggestions')response=await handleTagSuggestions(request,{sqlite});
    else if(path.pathname==='/api/account-gender')response=await handleAccountGender(request,{sqlite,userId:identity?.id});
-   else if(path.pathname==='/api/ai-match')response=await handleMatchAI(request,{sqlite,userId:identity?.id,apiKey:process.env.OPENAI_API_KEY,model:process.env.MATCHLOVE_AI_MODEL||'gpt-6-luna'});
+   else if(path.pathname==='/api/ai-match'){if(identity&&!sqlite.prepare('SELECT 1 FROM matchlove_photos WHERE user=?').get(identity.id))response=new Response(JSON.stringify({error:'Добавь хотя бы одно фото, чтобы начать поиск.',code:'PHOTO_REQUIRED',source:sqlite.prepare('SELECT source FROM matchlove_profiles WHERE user=?').get(identity.id)?.source||''}),{status:409,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});else response=await handleMatchAI(request,{sqlite,userId:identity?.id,apiKey:process.env.OPENAI_API_KEY,model:process.env.MATCHLOVE_AI_MODEL||'gpt-6-luna'});}
    else if(['/api/ml-social','/api/ml-like','/api/ml-chat','/api/ml-presence'].includes(path.pathname))response=await handleSocial(request,{sqlite,userId:identity?.id,apiKey:process.env.OPENAI_API_KEY,model:process.env.MATCHLOVE_AI_MODEL||'gpt-6-luna'});
    else if(path.pathname==='/api/account'&&method==='DELETE'){
     if(!identity)response=new Response('{"error":"Войдите в аккаунт"}',{status:401,headers:{'Content-Type':'application/json'}});

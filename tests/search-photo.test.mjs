@@ -23,6 +23,7 @@ test('Gallery converts to WebP, persists, enforces 30, and isolates private and 
   assert.equal((await upload(null)).status,401);assert.equal((await upload(a,png,'image/png','https://other.example')).status,403);
   assert.equal((await upload(a,Buffer.from('<svg/>'),'image/svg+xml')).status,400);
   assert.equal((await upload(a,Buffer.from([137,80,78,71,13,10,26,10]),'image/png')).status,400);
+  for(const method of ['GET','POST']){const denied=await call('/api/ai-match',{method,cookie:a,...(method==='POST'?{body:{text:'Описание '.repeat(30)}}:{})});assert.equal(denied.status,409);assert.equal((await denied.json()).code,'PHOTO_REQUIRED');}
   r=await upload(a);assert.equal(r.status,200);let saved=await r.json();assert.equal(saved.photos.length,1);assert.equal(saved.photos[0].main,true);assert.equal(saved.url,saved.photos[0].url);const first=saved.photos[0];
   r=await call(saved.url,{cookie:a});assert.equal(r.status,200);assert.equal(r.headers.get('content-type'),'image/webp');assert.match(r.headers.get('cache-control'),/no-store/);const webp=Buffer.from(await r.arrayBuffer());assert.equal(webp.toString('ascii',8,12),'WEBP');
   assert.equal((await call(saved.url,{cookie:b})).status,404);assert.equal((await call(saved.url)).status,401);assert.equal((await(await call('/api/search-photo-info',{cookie:b})).json()).url,null);
@@ -38,6 +39,8 @@ test('Gallery converts to WebP, persists, enforces 30, and isolates private and 
   await stop();await start();r=await call('/api/auth/login',{method:'POST',body:account('photo-a@example.test')});assert.equal(r.status,200);a=r.headers.get('set-cookie').split(';')[0];
   saved=await(await call('/api/search-photo-info',{cookie:a})).json();assert.equal(saved.photos.length,2);assert.equal(saved.url,second.url);assert.deepEqual(Buffer.from(await(await call(saved.url,{cookie:a})).arrayBuffer()),webp);
   r=await call('/api/search-photo',{method:'DELETE',cookie:a,body:{id:second.id}});saved=await r.json();assert.equal(saved.url,first.url);assert.equal(saved.photos.length,1);
+  assert.equal((await call('/api/search-photo',{method:'DELETE',cookie:a,body:{id:first.id}})).status,409);
+  assert.equal((await(await call('/api/search-photo-info',{cookie:a})).json()).photos.length,1);
   for(let i=1;i<30;i++)app.sqlite.prepare('INSERT INTO matchlove_photos VALUES(?,?,?,?,?,?)').run('fill-'+i,aId,'image/webp',webp,0,new Date().toISOString());
   assert.equal((await upload(a)).status,409);assert.equal(app.sqlite.prepare('SELECT COUNT(*) AS n FROM matchlove_photos WHERE user=?').get(aId).n,30);
   await call('/api/auth/logout',{method:'POST',cookie:a,body:{}});assert.equal((await call(saved.url,{cookie:a})).status,401);

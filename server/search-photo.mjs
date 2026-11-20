@@ -34,7 +34,7 @@ export async function handleSearchPhoto(request,{sqlite,userId}){
   const body=await request.json().catch(()=>({}));const row=sqlite.prepare('SELECT id,is_main FROM matchlove_photos WHERE user=? AND id=?').get(userId,typeof body.id==='string'?body.id:'');if(!row)return json({error:'Фото не найдено'},404);
   sqlite.exec('BEGIN IMMEDIATE');try{
    if(request.method==='PATCH'){sqlite.prepare('UPDATE matchlove_photos SET is_main=0 WHERE user=?').run(userId);sqlite.prepare('UPDATE matchlove_photos SET is_main=1 WHERE user=? AND id=?').run(userId,row.id);}
-   else{sqlite.prepare('DELETE FROM matchlove_photos WHERE user=? AND id=?').run(userId,row.id);if(row.is_main){const next=sqlite.prepare('SELECT id FROM matchlove_photos WHERE user=? ORDER BY created,id LIMIT 1').get(userId);if(next)sqlite.prepare('UPDATE matchlove_photos SET is_main=1 WHERE id=?').run(next.id);}}
+   else{if(sqlite.prepare('SELECT COUNT(*) n FROM matchlove_photos WHERE user=?').get(userId).n<=1){sqlite.exec('ROLLBACK');return json({error:'Нужно оставить хотя бы одно фото. Сначала загрузи замену.'},409);}sqlite.prepare('DELETE FROM matchlove_photos WHERE user=? AND id=?').run(userId,row.id);if(row.is_main){const next=sqlite.prepare('SELECT id FROM matchlove_photos WHERE user=? ORDER BY created,id LIMIT 1').get(userId);if(next)sqlite.prepare('UPDATE matchlove_photos SET is_main=1 WHERE id=?').run(next.id);}}
    sqlite.exec('COMMIT');
   }catch(error){sqlite.exec('ROLLBACK');throw error;}return json({ok:true,...gallery(sqlite,userId)});
  }
