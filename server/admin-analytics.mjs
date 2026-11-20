@@ -51,6 +51,11 @@ export async function handleAnalytics(request,{sqlite:db,userId,adminIds='',now=
  const excluded=adminList.length?adminList:[''];const marks=excluded.map(()=>'?').join(',');
  const one=(sql,...args)=>db.prepare(sql).get(...args),all=(sql,...args)=>db.prepare(sql).all(...args);
  const sessionFilter=`(user IS NULL OR user NOT IN (${marks}))`;
+ if(url.pathname==='/api/admin/messages'){
+  const target=url.searchParams.get('user')||'';if(!db.prepare('SELECT 1 FROM auth_accounts WHERE id=?').get(target))return json({error:'Пользователь не найден'},404);
+  const messages=all('SELECT id,sender,recipient,body,created FROM messages WHERE sender=? OR recipient=? ORDER BY created DESC,id DESC LIMIT 100',target,target).reverse();
+  db.prepare('INSERT INTO audits(id,actor,action,target,created) VALUES(?,?,?,?,?)').run(randomUUID(),userId,'view_user_messages',target,new Date(now).toISOString());return json({messages,limit:100});
+ }
  if(url.pathname==='/api/admin/users'){
   const query=String(url.searchParams.get('q')||'').trim().slice(0,120),needle=query.toLocaleLowerCase('ru');
   const found=needle?all("SELECT a.id,a.email,COALESCE(json_extract(p.parsed,'$.self.name'),'') AS name FROM auth_accounts a LEFT JOIN matchlove_profiles p ON p.user=a.id ORDER BY a.created DESC").filter(u=>[u.id,u.email,u.name].some(v=>String(v).toLocaleLowerCase('ru').includes(needle))).slice(0,100).map(u=>u.id):[];
