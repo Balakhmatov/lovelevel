@@ -32,7 +32,7 @@ export async function handleSocial(request,{sqlite:db,userId:id,apiKey,model}){
   const count=db.prepare('SELECT COUNT(*) AS count FROM likes WHERE sender=? AND created>=?').get(id,new Date(Date.now()-86400000).toISOString()).count;
   if(count>=100&&!status(db,id,target).liked)return J({error:'Лимит 100 новых симпатий за сутки'},429);
   const inserted=db.prepare('INSERT OR IGNORE INTO likes(sender,recipient,created) VALUES(?,?,?)').run(id,target,new Date().toISOString());
-  if(inserted.changes)try{enqueueEmail(db,target,'likes');}catch{console.warn('MatchLove like notification could not be queued');}
+  if(inserted.changes)try{const now=Date.now();enqueueEmail(db,target,'likes',now,id);if(status(db,id,target).matched){enqueueEmail(db,target,'matches',now,id);enqueueEmail(db,id,'matches',now,target);}}catch{console.warn('MatchLove like notification could not be queued');}
   return J({ok:true,...status(db,id,target)});
  }
  if(path==='/api/ml-chat'&&method==='GET'){
@@ -50,7 +50,8 @@ export async function handleSocial(request,{sqlite:db,userId:id,apiKey,model}){
   const sent=db.prepare('SELECT COUNT(*) AS n FROM messages WHERE sender=? AND created>=?').get(id,new Date(Date.now()-60000).toISOString()).n;
   if(sent>=20)return J({error:'Слишком много сообщений'},429);
   if(typeof b.client==='string'&&/^[a-zA-Z0-9_-]{1,64}$/.test(b.client))touchPresence(db,id,{client:b.client,target,typing:false});
-  const mid=randomUUID();db.prepare('INSERT INTO messages(id,sender,recipient,body,created) VALUES(?,?,?,?,?)').run(mid,id,target,message,new Date().toISOString());try{enqueueEmail(db,target,'messages');}catch{console.warn('MatchLove message notification could not be queued');}return J({ok:true,id:mid});
+  const mid=randomUUID();db.prepare('INSERT INTO messages(id,sender,recipient,body,created) VALUES(?,?,?,?,?)').run(mid,id,target,message,new Date().toISOString());try{enqueueEmail(db,target,'messages',Date.now(),id);}catch{console.warn('MatchLove message notification could not be queued');}return J({ok:true,id:mid});
  }
  return J({error:'Не найдено'},404);
 }
+
