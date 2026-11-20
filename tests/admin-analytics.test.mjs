@@ -63,3 +63,10 @@ test('Report validates ownership and CSRF, and atomic block stops actual chat an
  await call('/api/unblock',{target:'b'});assert.equal((await handleSocial(request('/api/ml-chat',{target:'b',body:'Allowed'}),{sqlite:db,userId:'a'})).status,200);
  }finally{db.close();}
 });
+test('Admin participant search supports Cyrillic names, email and ID without wildcard interpretation',async()=>{
+ const db=setup();try{db.prepare('UPDATE matchlove_profiles SET parsed=? WHERE user=?').run(JSON.stringify({self:{name:'Мария Новгородская'}}),'a');
+ const find=async q=>(await(await handleAnalytics(request('/api/admin/users?q='+encodeURIComponent(q)),{sqlite:db,userId:'admin',adminIds:'admin',now})).json()).users;
+ assert.deepEqual((await find('мАРИЯ')).map(u=>u.id),['a']);assert.deepEqual((await find('b@example')).map(u=>u.id),['b']);assert.equal((await find("%' OR 1=1 --")).length,0);assert.equal((await find('admin')).length,0);
+ assert.equal((await handleAnalytics(request('/api/admin/users?q=Мария'),{sqlite:db,userId:'b',adminIds:'admin',now})).status,403);
+ }finally{db.close();}
+});

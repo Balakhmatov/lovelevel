@@ -52,14 +52,17 @@ export async function handleAnalytics(request,{sqlite:db,userId,adminIds='',now=
  const one=(sql,...args)=>db.prepare(sql).get(...args),all=(sql,...args)=>db.prepare(sql).all(...args);
  const sessionFilter=`(user IS NULL OR user NOT IN (${marks}))`;
  if(url.pathname==='/api/admin/users'){
+  const query=String(url.searchParams.get('q')||'').trim().slice(0,120),needle=query.toLocaleLowerCase('ru');
+  const found=needle?all("SELECT a.id,a.email,COALESCE(json_extract(p.parsed,'$.self.name'),'') AS name FROM auth_accounts a LEFT JOIN matchlove_profiles p ON p.user=a.id ORDER BY a.created DESC").filter(u=>[u.id,u.email,u.name].some(v=>String(v).toLocaleLowerCase('ru').includes(needle))).slice(0,100).map(u=>u.id):[];
+  const searchClause=needle?' AND a.id IN ('+(found.length?found.map(()=>'?').join(','):'NULL')+')':'';
   const users=all(`SELECT a.id,a.email,a.gender,a.created,COALESCE(NULLIF(json_extract(p.parsed,'$.self.name'),''),'Участник') AS name,p.user IS NOT NULL AS profile,
    (SELECT MAX(seen) FROM analytics_sessions WHERE user=a.id) AS last_seen,
    (SELECT COALESCE(SUM(active_seconds),0) FROM analytics_sessions WHERE user=a.id) AS active_seconds,
    (SELECT COUNT(*) FROM likes WHERE sender=a.id) AS likes,
    (SELECT COUNT(*) FROM messages WHERE sender=a.id) AS messages
-   FROM auth_accounts a LEFT JOIN matchlove_profiles p ON p.user=a.id WHERE a.id NOT IN (${marks})
-   ORDER BY COALESCE((SELECT MAX(seen) FROM analytics_sessions WHERE user=a.id),a.created) DESC,a.id LIMIT 100`,...excluded);
-  return json({users,limit:100});
+   FROM auth_accounts a LEFT JOIN matchlove_profiles p ON p.user=a.id WHERE a.id NOT IN (${marks})${searchClause}
+   ORDER BY COALESCE((SELECT MAX(seen) FROM analytics_sessions WHERE user=a.id),a.created) DESC,a.id LIMIT 100`,...excluded,...found);
+  return json({users,limit:100,query});
  }
  if(url.pathname!=='/api/admin/analytics')return json({error:'Не найдено'},404);
  const totals=one(`SELECT COUNT(*) AS sessions,COUNT(DISTINCT visitor) AS visitors,COUNT(DISTINCT user) AS active_users,COALESCE(SUM(active_seconds),0) AS active_seconds FROM analytics_sessions WHERE started>=? AND ${sessionFilter}`,since,...excluded);

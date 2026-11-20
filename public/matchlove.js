@@ -421,6 +421,8 @@ document.addEventListener('click',async event=>{
 });
 
 let adminData=null,adminDays=30,adminTab='overview',adminLoading=false,adminError='',adminSequence=0;
+let adminUserQuery='';
+function adminPersonLink(id,label=id){return '<button type="button" class="admin-person-link" data-profile="'+esc(id)+'">'+esc(label)+'</button>';}
 const adminNumber=x=>Number(x||0).toLocaleString('ru-RU');
 const adminTime=x=>Math.floor(Number(x||0)/60)+' мин '+Math.floor(Number(x||0)%60)+' с';
 const adminDate=x=>x?new Date(x).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'}):'—';
@@ -428,7 +430,7 @@ function adminTable(headers,rows){return '<div class="admin-table-wrap"><table c
 async function openAdmin(){
  if(!S.me?.admin){toast('Доступ только для администратора');return;}
  const sequence=++adminSequence,owner=S.me.id;++navigationSequence;stopChatActivity();S.page='admin';adminLoading=true;adminError='';render();
- try{const paths=adminTab==='overview'?['admin/analytics?days='+adminDays]:adminTab==='users'?['admin/users']:['admin/queue'];const data=await api(paths[0]);if(sequence!==adminSequence||S.me?.id!==owner||S.page!=='admin')return;adminData=data;}
+ try{const paths=adminTab==='overview'?['admin/analytics?days='+adminDays]:adminTab==='users'?['admin/users?q='+encodeURIComponent(adminUserQuery)]:['admin/queue'];const data=await api(paths[0]);if(sequence!==adminSequence||S.me?.id!==owner||S.page!=='admin')return;adminData=data;}
  catch(error){if(sequence===adminSequence)adminError=error.message;}
  finally{if(sequence===adminSequence){adminLoading=false;if(S.me?.id===owner&&S.page==='admin')render();}}
 }
@@ -440,8 +442,8 @@ function adminPage(){
   if(adminTab==='overview'){
    const t=d.totals,metrics=[['Посетители',t.visitors],['Сессии',t.sessions],['Регистрации',t.registrations],['Активные участники',t.active_users],['В сети сейчас',t.online],['Время на сессию',adminTime(t.sessions?t.active_seconds/t.sessions:0)]];
    body='<div class="admin-metrics">'+metrics.map(([label,value])=>'<div class="panel"><small>'+label+'</small><strong>'+esc(typeof value==='number'?adminNumber(value):value)+'</strong></div>').join('')+'</div><h3>Воронка новых участников</h3>'+adminTable(['Этап','Участники','От регистраций'],[['registered','Регистрация'],['profile','Анкета'],['liked','Первый лайк'],['matched','Взаимный мэтч'],['chatted','Отправлено сообщение']].map(([key,label])=>[label,adminNumber(d.funnel[key]),d.funnel.registered?Math.round(d.funnel[key]/d.funnel.registered*100)+'%':'—']))+'<h3>Возвраты</h3>'+adminTable(['День','Вернулись','Когорта с завершённым днём'],Object.entries(d.retention).map(([key,r])=>[esc(key.toUpperCase()),r.eligible?Math.round(r.returned/r.eligible*100)+'%':'—',r.returned+' / '+r.eligible]))+'<h3>Источники и кампании</h3>'+adminTable(['Источник','Канал','Кампания','Посетители','Сессии','Регистрации'],d.sources.map(s=>[esc(s.source),esc(s.medium||'—'),esc(s.campaign||'—'),adminNumber(s.visitors),adminNumber(s.sessions),adminNumber(s.registrations)]))+'<h3>По дням · Москва</h3>'+adminTable(['Дата','Посетители','Сессии','Активное время'],d.daily.map(row=>[esc(row.day),adminNumber(row.visitors),adminNumber(row.sessions),adminTime(row.active_seconds)]))+'<h3>Действия за период</h3>'+adminTable(['Событие','Действия','Участники'],d.events.map(row=>[esc(({registration:'Регистрация',login:'Вход',profile_saved:'Сохранение анкеты',search:'Подбор',like:'Лайк',message:'Сообщение',photo_uploaded:'Фото',block:'Блокировка',report:'Жалоба'})[row.name]||row.name),adminNumber(row.count),adminNumber(row.users)]))+'<p class="profile-hint">'+esc(d.notes)+' Сбор начат: '+adminDate(d.trackingSince)+'. Время — оценка по активной вкладке и действиям пользователя. Источник регистрации — первый известный переход.</p>';
-  }else if(adminTab==='users')body='<p class="profile-hint">Последние '+d.limit+' участников по активности. Время указано за весь период сбора.</p>'+adminTable(['Участник','Email','Регистрация','Последний визит','Время','Анкета','Лайки','Сообщения'],d.users.map(u=>[esc(u.name)+'<small>'+esc(u.id)+'</small>',esc(u.email),adminDate(u.created),adminDate(u.last_seen),adminTime(u.active_seconds),u.profile?'Да':'Нет',adminNumber(u.likes),adminNumber(u.messages)]));
-  else body='<h3>Открытые жалобы</h3>'+adminTable(['Дата','От кого → на кого','Причина','Действия'],d.reports.map(r=>[adminDate(r.created),esc(r.reporter)+' → '+esc(r.target),esc(r.reason),'<button type="button" class="btn btn-ghost" data-report-context="'+esc(r.id)+'">Контекст</button><button type="button" class="btn btn-ghost" data-resolve-report="'+esc(r.id)+'">Закрыть</button>']));
+  }else if(adminTab==='users')body='<form id="admin-user-search" class="admin-user-search"><input class="field" name="query" aria-label="Поиск участников" placeholder="Имя, email или ID" maxlength="120" value="'+esc(adminUserQuery)+'"><button class="btn btn-green" type="submit">Найти</button></form><p class="profile-hint">До '+d.limit+' участников по активности. Время указано за весь период сбора.</p>'+adminTable(['Участник','Email','Регистрация','Последний визит','Время','Анкета','Лайки','Сообщения'],d.users.map(u=>[adminPersonLink(u.id,u.name)+'<small>'+esc(u.id)+'</small>',esc(u.email),adminDate(u.created),adminDate(u.last_seen),adminTime(u.active_seconds),u.profile?'Да':'Нет',adminNumber(u.likes),adminNumber(u.messages)]));
+  else body='<h3>Открытые жалобы</h3>'+adminTable(['Дата','От кого → на кого','Причина','Действия'],d.reports.map(r=>[adminDate(r.created),adminPersonLink(r.reporter)+' → '+adminPersonLink(r.target),esc(r.reason),'<button type="button" class="btn btn-ghost" data-report-context="'+esc(r.id)+'">Контекст</button><button type="button" class="btn btn-ghost" data-resolve-report="'+esc(r.id)+'">Закрыть</button>']));
  }
  return '<section class="admin-page"><div class="page-head"><h2>Админка</h2><p>Продукт, привлечение и модерация</p></div><div class="admin-toolbar">'+[['overview','Аналитика'],['users','Участники'],['reports','Модерация']].map(([key,label])=>'<button type="button" class="btn '+(adminTab===key?'btn-primary':'btn-ghost')+'" data-admin-tab="'+key+'">'+label+(key==='reports'?notificationBadge('reports'):key==='users'?notificationBadge('users'):'')+'</button>').join('')+(adminTab==='overview'?'<select class="field" id="admin-days" aria-label="Период">'+[7,30,90].map(days=>'<option value="'+days+'" '+(adminDays===days?'selected':'')+'>'+days+' дней</option>').join('')+'</select>':'')+'<button type="button" class="btn btn-ghost" data-admin-refresh>Обновить</button></div>'+body+'</section>';
 }
@@ -474,3 +476,5 @@ document.addEventListener('click',async event=>{
  }catch(error){if(dialog.isConnected)dialog.querySelector('p').textContent=error.message;}
 });
 
+
+document.addEventListener('submit',event=>{if(event.target.id!=='admin-user-search')return;event.preventDefault();adminUserQuery=event.target.elements.query.value.trim();void openAdmin();});
