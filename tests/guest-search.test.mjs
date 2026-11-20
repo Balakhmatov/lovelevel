@@ -25,14 +25,14 @@ test('Guest search opens auth for empty, one-character, short and oversized text
   assert(!view.run('pageHome()').includes('minlength="100"'));
  }
 });
-test('After successful auth the same short draft hits the existing minimum and stays available',async()=>{
- const view=app('я');await view.run('search()');
+test('After successful registration the same short draft hits the existing minimum and stays available',async()=>{
+ const view=app('я');await view.run("S.authMode='register';search()");
  const submit=view.listeners.submit.find(fn=>fn.toString().includes("e.target.id==='auth'"));
  await submit({target:{id:'auth'},preventDefault(){}});
  assert.equal(view.modal,null);assert.equal(view.run('S.logged'),true);assert.equal(view.run('S.query'),'я');assert.equal(view.run('S.page'),'home');assert(view.notices.some(text=>text.includes('100')));assert(!view.requests.includes('ai-match'));assert(view.run('pageHome()').includes('minlength="100"'));
 });
-test('A sufficiently detailed guest draft resumes matching after auth',async()=>{
- const view=app('Описание интересов и пожеланий. '.repeat(6));await view.run('search()');
+test('A sufficiently detailed guest draft resumes matching after registration',async()=>{
+ const view=app('Описание интересов и пожеланий. '.repeat(6));await view.run("S.authMode='register';search()");
  const submit=view.listeners.submit.find(fn=>fn.toString().includes("e.target.id==='auth'"));
  await submit({target:{id:'auth'},preventDefault(){}});
  assert.equal(view.modal,null);assert.equal(view.run('S.page'),'results');assert.equal(view.requests.filter(path=>path==='ai-match').length,2);
@@ -42,4 +42,16 @@ test('Switching to registration keeps authentication in the popup and preserves 
  const click=view.listeners.click.find(fn=>fn.toString().includes("closest('#toggleauth')"));
  await click({target:{closest:selector=>selector==='#toggleauth'?{}:null}});
  assert(view.modal);assert(view.modal.html.includes('Зарегистрироваться'));assert.equal(view.run('S.query'),'я');assert.equal(view.run('S.page'),'home');
+});
+
+test('Existing account login restores saved description and never parses guest text',async()=>{
+ const view=app('A');await view.run('search()');
+ await view.run("const originalAPI=api;api=async(path,opt)=>path==='ai-match'&&!opt?.method?{source:'Сохранённое подробное описание из аккаунта',results:[{id:'candidate'}]}:originalAPI(path,opt);");
+ const submit=view.listeners.submit.find(fn=>fn.toString().includes("e.target.id==='auth'"));await submit({target:{id:'auth'},preventDefault(){}});
+ assert.equal(view.run('S.query'),'Сохранённое подробное описание из аккаунта');assert.equal(view.field.value,'Сохранённое подробное описание из аккаунта');assert.equal(view.run('S.page'),'home');assert.equal(view.modal,null);assert(!view.requests.includes('ai-match'));assert(![...view.storage.values()].includes('A'));
+});
+test('Existing account without saved text does not inherit a guest draft',async()=>{
+ const view=app('Случайно набранный гостевой текст');await view.run('search()');
+ const submit=view.listeners.submit.find(fn=>fn.toString().includes("e.target.id==='auth'"));await submit({target:{id:'auth'},preventDefault(){}});
+ assert.equal(view.run('S.query'),'');assert.equal(view.field.value,'');assert.equal(view.run('S.page'),'home');assert.equal(view.requests.filter(p=>p==='ai-match').length,1);
 });
