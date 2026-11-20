@@ -30,7 +30,7 @@ test('One daily email combines likes, matches and messages with an HTML button a
  await tick(db,base+DIGEST_DAY,sent);assert.equal(sent.length,1);
  const {payload,options}=sent[0];assert.deepEqual(payload.to,['recipient@example.com']);
  for(const line of ['Новые симпатии: 1','Взаимные мэтчи: 1','Новые сообщения: 3'])assert(payload.text.includes(line));
- assert(payload.html.includes('Открыть MatchLove'));assert(payload.html.includes('href="https://example.com/"'));assert(options.headers['Idempotency-Key']);
+ assert(payload.html.includes('Открыть MatchLove'));assert(payload.html.includes('src="https://example.com/android-chrome-192x192.png"'));assert(payload.html.includes('alt="MatchLove"'));assert(payload.html.includes('role="presentation"'));assert(payload.html.includes('href="https://example.com/"'));assert(options.headers['Idempotency-Key']);
  assert(!payload.text.includes('peer'));assert(!payload.text.includes('password'));assert.equal(db.prepare('SELECT sent FROM matchlove_email_outbox').get().sent,base+DIGEST_DAY);
  // A fresh worker/tick and a burst of new events cannot send another message the same day.
  enqueueEmail(db,'recipient','messages',base+DIGEST_DAY+1000);
