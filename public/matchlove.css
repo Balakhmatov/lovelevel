@@ -208,3 +208,7 @@ html.in-conversation{background:#17131a;scrollbar-gutter:auto}
 .page-head .premium-coming-soon{font-size:clamp(32px,5vw,48px);font-weight:800;line-height:1.2;color:var(--green);margin-top:24px}
 
 .utility-dialog .login .panel{background:transparent;box-shadow:none;border:0;border-radius:0;padding:0}
+
+.notification-badge{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--red);color:#fff;font-size:11px;font-weight:750;line-height:1;flex-shrink:0;margin-left:6px}.notification-badge[hidden]{display:none}.bottomnav button{position:relative}.bottomnav [data-notification-badge]{position:absolute;top:2px;right:calc(50% - 27px);margin:0;min-width:18px;height:18px;font-size:10px}.navbtn .notification-badge{margin-left:auto}.admin-toolbar .btn{gap:5px}
+
+.chatlist-heading{font-size:24px;margin:20px 0 16px;letter-spacing:-.03em}
