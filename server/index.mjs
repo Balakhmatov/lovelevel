@@ -1,4 +1,6 @@
 import {handleEmailSettings,startEmailWorker} from './email-notifications.mjs';
+import {handleAnalytics,recordProductEvent} from './admin-analytics.mjs';
+import {handleModeration} from './moderation.mjs';
 import {isMain} from './entrypoint.mjs';
 import http from 'node:http';
 import {statfs} from 'node:fs/promises';
@@ -78,6 +80,8 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
    if(path.pathname==='/api/telegram/webhook')response=await botMenu(request,{token:telegramBotToken,origin});
    else if(path.pathname.startsWith('/api/auth/'))response=await auth.route(request,ip);
    else if(['/api/search-photo','/api/search-photo-info','/api/profile-photo'].includes(path.pathname))response=await handleSearchPhoto(request,{sqlite,userId:identity?.id});
+   else if(['/api/analytics','/api/admin/analytics','/api/admin/users'].includes(path.pathname))response=await handleAnalytics(request,{sqlite,userId:identity?.id,adminIds,ip});
+   else if(['/api/block','/api/unblock','/api/blocks','/api/report'].includes(path.pathname))response=await handleModeration(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/ml-email-settings')response=await handleEmailSettings(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/ml-profile')response=await handleProfile(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/ml-search-settings')response=await handleSearchSettings(request,{sqlite,userId:identity?.id});
@@ -90,6 +94,7 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
     if(!identity)response=new Response('{"error":"Войдите в аккаунт"}',{status:401,headers:{'Content-Type':'application/json'}});
     else{response=await app.fetch(request,env);if(response.ok){sqlite.prepare('DELETE FROM auth_accounts WHERE id=?').run(identity.id);response.headers.set('Set-Cookie',`${auth.cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureCookies?'; Secure':''}`);}}
    }else response=await app.fetch(request,env);
+   if(path.pathname.startsWith('/api/'))try{recordProductEvent(sqlite,request,identity?.id||auth.current(new Request(path,{headers:{cookie:response.headers.get('set-cookie')||''}}))?.id,response);}catch{console.warn('Product event was not recorded');}
    if(path.pathname==='/api/me'&&response.ok&&identity){const me=await response.json();response=new Response(JSON.stringify({...me,gender:identity.gender||null}),{status:response.status,headers:response.headers});}
    const responseHeaders=Object.fromEntries(response.headers);responseHeaders['X-Content-Type-Options']='nosniff';responseHeaders['Referrer-Policy']='same-origin';if(path.pathname!=='/miniapp')responseHeaders['X-Frame-Options']='DENY';
    if(secureCookies)responseHeaders['Strict-Transport-Security']='max-age=31536000';
@@ -110,3 +115,4 @@ if(isMain(import.meta.url)){
  server.listen(port,'127.0.0.1',()=>console.log(`LoveLevel listening on 127.0.0.1:${port}`));
  let stopping=false;const stop=()=>{if(stopping)return;stopping=true;server.close(()=>process.exit(0));server.closeIdleConnections();setTimeout(()=>process.exit(1),10000).unref();};process.on('SIGTERM',stop);process.on('SIGINT',stop);
 }
+
