@@ -220,3 +220,5 @@ html.in-conversation{background:#17131a;scrollbar-gutter:auto}
 .photo-required-hint{font-size:12px;line-height:1.5;color:var(--muted);margin-top:10px}
 
 .admin-message{padding:12px 0;border-top:1px solid #ffffff18;overflow-wrap:anywhere}.admin-message p{white-space:pre-wrap}
+
+.bubble[data-message-id]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:pan-y pinch-zoom;cursor:context-menu}.bubble[data-message-id]:focus-visible{outline:2px solid var(--green);outline-offset:3px}.reported-message{padding:12px 14px;border-radius:12px;background:#ffffff08;white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto}
