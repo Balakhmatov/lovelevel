@@ -233,3 +233,9 @@ body{background-color:#21151e}
  .in-conversation .content{padding-top:0}
 }
 html.in-conversation,.in-conversation body{background-color:#17131a}
+
+/* Black top edge blends into Safari; the burgundy glow starts below the header. */
+html,body{background-color:#000}
+body::before{inset:0;background:linear-gradient(to bottom,#000 0,#000 55px,transparent 240px),radial-gradient(ellipse 85% 55% at 55% 40%,#38131f 0,#1c1018 48%,#000 100%)}
+@media(max-width:740px){.bottomnav{background:#000000f5}}
+html.in-conversation,.in-conversation body,.in-conversation body::before{background:#17131a}
