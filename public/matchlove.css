@@ -222,3 +222,14 @@ html.in-conversation{background:#17131a;scrollbar-gutter:auto}
 .admin-message{padding:12px 0;border-top:1px solid #ffffff18;overflow-wrap:anywhere}.admin-message p{white-space:pre-wrap}
 
 .bubble[data-message-id]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:pan-y pinch-zoom;cursor:context-menu}.bubble[data-message-id]:focus-visible{outline:2px solid var(--green);outline-offset:3px}.reported-message{padding:12px 14px;border-radius:12px;background:#ffffff08;white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto}
+
+/* Give Safari an actual canvas colour, not only a decorative pseudo-element. */
+html{background-color:#21151e}
+body{background-color:#21151e}
+@media(max-width:740px){
+ body::before{background:radial-gradient(ellipse at 55% 25%,#38131f 0,#21151e 55%,#21151e 100%)}
+ .bottomnav{background:#21151ef5}
+ .content{padding-top:calc(15px + env(safe-area-inset-top))}
+ .in-conversation .content{padding-top:0}
+}
+html.in-conversation,.in-conversation body{background-color:#17131a}
