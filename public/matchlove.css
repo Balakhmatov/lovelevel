@@ -241,3 +241,5 @@ body::before{inset:0;background:linear-gradient(to bottom,#000 0,#000 55px,trans
 html.in-conversation,.in-conversation body,.in-conversation body::before{background:#17131a}
 
 .home-introduction{max-width:640px;margin-top:16px;color:#c9bdc5;font-size:16px;line-height:1.65}.searchbox .match-intro{color:#f4edf1;font-size:clamp(16px,2vw,20px);font-weight:500;line-height:1.6;margin:0;max-width:760px}#about::placeholder{font-size:14px;font-style:italic;color:#9c909a;opacity:1;line-height:1.65}@media(max-width:740px){.home-introduction{font-size:14px}.searchbox .match-intro{font-size:16px}}
+
+.hero .home-introduction{font-family:inherit;font-size:clamp(22px,2.8vw,34px);font-weight:800;letter-spacing:-.035em;line-height:1.25;color:var(--white);margin-top:20px}
