@@ -253,3 +253,5 @@ html.in-conversation,.in-conversation body,.in-conversation body::before{backgro
 .zodiac-self-control{width:100%;min-width:0;max-width:100%}.zodiac-self-icon{flex:0 0 40px}.zodiac-self-control select{width:0;flex:1 1 0%;min-width:0}.profile-form>[class^=profile-field-]{max-width:100%}
 
 .search-requirements{font-size:12px;line-height:1.5;color:var(--muted);margin:0 0 12px}
+
+.searchbox .photo-gallery-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:nowrap;gap:8px}.search-input-status{display:grid;gap:5px;justify-items:end;flex:0 0 auto;color:var(--muted);font-size:12px;line-height:1.3}.search-input-status .complete{color:var(--green)}.search-input-status button{background:none;color:var(--green);font-size:11px;line-height:1.4;padding:0;text-decoration:underline;text-underline-offset:3px;white-space:nowrap}.searchbox .photo-upload{white-space:nowrap}@media(max-width:400px){.searchbox .photo-upload{padding:10px;font-size:12px;gap:6px}.search-input-status{font-size:11px}.search-input-status button{font-size:10px}}

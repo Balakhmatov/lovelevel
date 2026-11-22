@@ -1,5 +1,6 @@
+import {tagSearchContext,tagMatches,suggestionText} from './tag-search.mjs';
 import {CATEGORY_TAGS,COMMON_TAG_CATEGORIES} from './category-tags.mjs';
-export const MIN_TAG_USERS=5;
+export const MIN_TAG_USERS=3;
 const json=(v,status=200)=>new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 const norm=s=>String(s||'').toLowerCase().replace(/ё/g,'е').trim().replace(/\s+/g,' ');
 const safe=tag=>typeof tag==='string'&&tag.trim().length>=3&&tag.trim().length<=80&&!/https?:|www\.|@|\d{3}|секс|фетиш|эрот|бдсм|диагноз|религи|полит|ориентац/i.test(tag)&&/^[\p{L}\p{N}\s,.'«»()—–-]+$/u.test(tag);
@@ -21,10 +22,10 @@ export async function handleTagSuggestions(request,{sqlite}){
  const q=request.method==='POST'?body.q:url.searchParams.get('q')||'',category=(request.method==='POST'?body.category:url.searchParams.get('category'))||'interests',plain=(request.method==='POST'?body.format:url.searchParams.get('format'))==='tag';
  if(!Object.hasOwn(CATEGORY_TAGS,category))return json({suggestions:[]},400);
  if(typeof q!=='string'||q.length>80)return json({suggestions:[]});
- const cleaned=norm(q),verb=cleaned.match(/^(?:я\s+)?(люблю|обожаю)\s*/),prefix=plain?'':verb?verb[1]+' ':cleaned?'':'люблю ',query=verb?cleaned.slice(verb[0].length):cleaned,words=query.split(' ').filter(Boolean);
- const common=COMMON_TAG_CATEGORIES.includes(category)?sqlite.prepare('SELECT tag,COUNT(DISTINCT user) AS count FROM matchlove_category_tag_usage WHERE category=? GROUP BY tag HAVING COUNT(DISTINCT user)>=?').all(category,MIN_TAG_USERS):[];
+ const context=tagSearchContext(q),query=context.query;
+ const usage=COMMON_TAG_CATEGORIES.includes(category)?sqlite.prepare('SELECT tag,COUNT(DISTINCT user) AS count FROM matchlove_category_tag_usage WHERE category=? GROUP BY tag').all(category):[];
  const rows=new Map(CATEGORY_TAGS[category].map((label,index)=>[norm(label),{label,popularity:0,index}]));
- for(const r of common)if(safe(r.tag)){const old=rows.get(norm(r.tag));rows.set(norm(r.tag),{label:old?.label||r.tag,popularity:r.count,index:old?.index??10000});}
- const matches=[...rows.values()].map(row=>({...row,key:norm(row.label)})).filter(row=>!query||words.every(word=>row.key.includes(word))).sort((a,b)=>Number(b.key.startsWith(query))-Number(a.key.startsWith(query))||b.popularity-a.popularity||a.index-b.index).slice(0,plain?12:6);
- return json({suggestions:matches.map(row=>({label:row.label,text:prefix+row.label}))});
+ for(const r of usage)if(safe(r.tag)){const old=rows.get(norm(r.tag));if(old||r.count>=MIN_TAG_USERS)rows.set(norm(r.tag),{label:old?.label||r.tag,popularity:r.count,index:old?.index??10000});}
+ const matches=[...rows.values()].map(row=>({...row,key:norm(row.label)})).filter(row=>tagMatches(row.label,context)).sort((a,b)=>b.popularity-a.popularity||Number(b.key.startsWith(query))-Number(a.key.startsWith(query))||a.index-b.index).slice(0,plain?12:6);
+ return json({suggestions:matches.map(row=>({label:row.label,text:suggestionText(row.label,context,plain)}))});
 }
