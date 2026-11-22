@@ -259,3 +259,5 @@ html.in-conversation,.in-conversation body,.in-conversation body::before{backgro
 .cardgrid .matchpill{top:auto;bottom:12px}
 
 .search-method-choice{font-size:14px;line-height:1.6;color:#d0c6ce;margin:0 0 12px}.search-method-choice button{padding:0;display:inline;background:none;color:var(--green);font:inherit;font-weight:650;text-decoration:none}.search-method-choice button:hover{color:#d5ffb8}.search-input-status{color:var(--red);font-size:13px}.search-input-status .complete{color:var(--green);font-size:21px;line-height:1}
+
+.wanted-priorities{display:grid;align-content:start;gap:17px;min-width:0;max-width:100%}.wanted-priorities>[class^=profile-field-]{display:grid;gap:8px;min-width:0;font-size:15px}
