@@ -513,4 +513,15 @@ function countProfileTags(profile){let n=0;for(const side of ['self','wanted'])f
 function searchInputStatus(){const n=S.query.trim().length;return '<div class="search-input-status"><span id="search-character-count" class="'+(n>=70?'complete':'')+'" title="Символов в описании: '+n+' из 70" aria-label="Символов: '+n+' из 70">'+(n>=70?'✓':n+' из 70')+'</span></div>';}
 function updateSearchCharacterCount(text){const counter=$('#search-character-count');if(!counter)return;const n=text.trim().length;counter.textContent=n>=70?'✓':n+' из 70';counter.classList.toggle('complete',n>=70);counter.title='Символов в описании: '+n+' из 70';counter.setAttribute('aria-label','Символов: '+n+' из 70');}
 
-function compactWantedFields(){const form=$('#profile-edit[data-side="wanted"]');if(!form)return;const goal=form.querySelector('.profile-field-goal'),habits=form.querySelector('.profile-field-habits');if(!goal||!habits||goal.parentElement!==form)return;const column=document.createElement('div');column.className='wanted-priorities';goal.before(column);column.append(goal,habits);}
+function compactWantedFields(){
+ const form=$('#profile-edit[data-side="wanted"]');if(!form)return;
+ const fields=['zodiac','goal','interests','habits','personality','profession','appearance','sexual_preferences'].map(key=>form.querySelector('.profile-field-'+key)).filter(Boolean);if(!fields.length)return;
+ let group=form.querySelector('.wanted-columns');
+ if(window.innerWidth<=740){if(group)group.replaceWith(...fields);return;}
+ if(!group){group=document.createElement('div');group.className='wanted-columns';fields[0].before(group);}
+ const left=document.createElement('div'),right=document.createElement('div');left.className=right.className='wanted-column';group.replaceChildren(left,right);
+ const take=key=>fields.find(field=>field.classList.contains('profile-field-'+key));
+ const zodiac=take('zodiac'),goal=take('goal'),habits=take('habits');if(zodiac)left.append(zodiac);if(goal)right.append(goal);if(habits)right.append(habits);
+ for(const field of fields){if([zodiac,goal,habits].includes(field))continue;(left.offsetHeight<=right.offsetHeight?left:right).append(field);}
+}
+window.addEventListener('resize',compactWantedFields);
