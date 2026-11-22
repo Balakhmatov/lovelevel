@@ -16,5 +16,5 @@ export function verifyMiniApp(raw,botToken,now=Date.now()){
  if(!timingSafeEqual(expected,Buffer.from(hash,'hex')))return null;
  let user;try{user=JSON.parse(params.get('user')||'null');}catch{return null;}
  if(!user||!Number.isSafeInteger(user.id)||user.id<=0||user.is_bot===true||typeof user.first_name!=='string')return null;
- return {id:String(user.id),username:typeof user.username==='string'?user.username.slice(0,64):'',proof:'miniapp:'+hash,expires:(date+630)*1000};
+ return {id:String(user.id),name:user.first_name.trim().slice(0,60),username:typeof user.username==='string'?user.username.slice(0,64):'',proof:'miniapp:'+hash,expires:(date+630)*1000};
 }

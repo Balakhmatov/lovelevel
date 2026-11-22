@@ -38,7 +38,7 @@ export async function handleProfile(request,{sqlite:db,userId}){
  if(request.method==='GET'){
   const row=db.prepare('SELECT parsed,updated FROM matchlove_profiles WHERE user=?').get(target);
   const classic=db.prepare('SELECT name,city FROM profiles WHERE id=?').get(target),gender=db.prepare('SELECT gender FROM auth_accounts WHERE id=?').get(target)?.gender;
-  const profile=mergeManualProfile(row?JSON.parse(row.parsed):{});profile.self.gender=gender||profile.self.gender;
+  const profile=applyManualProfile(db,target,row?JSON.parse(row.parsed):{});profile.self.gender=gender||profile.self.gender;
   const photos=db.prepare('SELECT id,is_main FROM matchlove_photos WHERE user=? ORDER BY is_main DESC,created,id').all(target).map(p=>({id:p.id,main:!!p.is_main,url:'/api/profile-photo?user='+encodeURIComponent(target)+'&id='+encodeURIComponent(p.id)}));
   const own=target===userId;
   const locked=own?JSON.parse(db.prepare('SELECT data FROM matchlove_profile_overrides WHERE user=?').get(target)?.data||'{}'):undefined;

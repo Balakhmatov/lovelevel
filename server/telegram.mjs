@@ -16,7 +16,7 @@ export function verifyTelegram(data,botToken,now=Date.now()){
  const secret=createHash('sha256').update(botToken).digest();
  const expected=createHmac('sha256',secret).update(check).digest();
  if(!timingSafeEqual(expected,Buffer.from(hash,'hex')))return null;
- return {id,username:typeof data.username==='string'?data.username.slice(0,64):'',proof:hash,expires:(date+330)*1000};
+ return {id,name:String(data.first_name||'').trim().slice(0,60),username:typeof data.username==='string'?data.username.slice(0,64):'',proof:hash,expires:(date+330)*1000};
 }
 
 export function createTelegramAuth(sqlite,{current,newSession,issueSession,consume},{origin,secure,registration,inviteCode,botToken='',botUsername='lovelevel_app_bot',now=()=>Date.now()}={}){
@@ -77,10 +77,12 @@ export function createTelegramAuth(sqlite,{current,newSession,issueSession,consu
     if(b.adult!==true||b.terms!==true)throw Object.assign(new Error('Подтвердите возраст 18+ и правила.'),{status:400});
     if(inviteCode&&(typeof b.invite!=='string'||!timingSafeEqual(Buffer.from(digest(b.invite)),Buffer.from(digest(inviteCode)))))throw Object.assign(new Error('Нужен код приглашения'),{status:403});
     if(!['male','female'].includes(b.gender))throw Object.assign(new Error('Выбери пол'),{status:400});
+    const name=String(b.name??proof.name??'').trim().replace(/\s+/g,' ');if(!name||name.length>60||/[\p{Cc}\p{Cf}]/u.test(name))throw Object.assign(new Error('Укажи имя: от 1 до 60 символов'),{status:400});
     target=randomUUID();
     // Internal provider key: not an email and rejected by password-login validation.
     // Telegram does not supply email; no email/username-based account merging occurs.
     sqlite.prepare('INSERT INTO auth_accounts(id,email,password_hash,created,gender) VALUES(?,?,?,?,?)').run(target,'telegram:'+proof.id,'!telegram-only',now(),b.gender);
+    sqlite.prepare('INSERT INTO matchlove_profile_overrides(user,data) VALUES(?,?)').run(target,JSON.stringify({self:{name}}));
    }
    if(!linked)sqlite.prepare('INSERT INTO auth_telegram_links(telegram_id,account,username,created) VALUES(?,?,?,?)').run(proof.id,target,proof.username,now());
    else sqlite.prepare('UPDATE auth_telegram_links SET username=? WHERE telegram_id=?').run(proof.username,proof.id);

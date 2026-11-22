@@ -9,7 +9,7 @@ import {diskBucket,openDatabase} from '../server/storage.mjs';
 import {createAccount} from '../server/manage.mjs';
 const origin='http://127.0.0.1:3118';let directory,instance,base,aliceCookie,bobCookie,aliceId,bobId;
 async function call(path,{method='GET',body,cookie,headers={}}={}){const h={Origin:origin,...headers};if(cookie)h.Cookie=cookie;if(body)h['Content-Type']='application/json';return fetch(base+path,{method,headers:h,body:body?JSON.stringify(body):undefined});}
-const account=(email,password='test-password-12345')=>({email,password,gender:'female',adult:true,terms:true,invite:'test-invitation'});
+const account=(email,password='test-password-12345')=>({name:'Тестовый участник',email,password,gender:'female',adult:true,terms:true,invite:'test-invitation'});
 async function register(email){const r=await call('/api/auth/register',{method:'POST',body:account(email)});assert.equal(r.status,201);return r.headers.get('set-cookie').split(';')[0];}
 async function makeProfile(cookie,name){const r=await call('/api/profile',{method:'POST',cookie,body:{name,birthdate:'1995-03-20',city:'Москва',gender:'woman',seeking:'all',intent:'Знакомства и общение',bio:'Достаточно длинное описание для проверки сохранения анкеты после перезапуска.',interests:['Кофе','Книги','Кино'],adult:true,terms:true}});assert.equal(r.status,200);return (await(await call('/api/me',{cookie})).json()).id;}
 before(async()=>{directory=await mkdtemp(join(tmpdir(),'lovelevel-vps-'));instance=createServer({origin,dataDir:directory,secureCookies:false,registration:true,inviteCode:'test-invitation',adminIds:'admin'});instance.server.listen(0,'127.0.0.1');await once(instance.server,'listening');base='http://127.0.0.1:'+instance.server.address().port;});

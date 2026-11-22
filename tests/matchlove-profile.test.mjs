@@ -12,7 +12,7 @@ test('Profiles support manual creation, protected AI merges, gallery access and 
  const dir=await mkdtemp(join(tmpdir(),'ml-profile-')),app=createServer({origin,dataDir:dir,secureCookies:false,registration:true});app.server.listen(0,'127.0.0.1');await once(app.server,'listening');const base='http://127.0.0.1:'+app.server.address().port;
  const call=(path,{method='GET',cookie,body,requestOrigin=origin}={})=>fetch(base+path,{method,headers:{Origin:requestOrigin,'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:body?JSON.stringify(body):undefined});
  try{
- const accounts=[];for(const [i,gender] of ['male','female'].entries()){const response=await call('/api/auth/register',{method:'POST',body:{email:'profile'+i+'@test.example',password:'profile-test-password',gender,adult:true,terms:true}});assert.equal(response.status,201);accounts.push({cookie:response.headers.get('set-cookie').split(';')[0],id:app.sqlite.prepare('SELECT id FROM auth_accounts WHERE email=?').get('profile'+i+'@test.example').id});}
+ const accounts=[];for(const [i,gender] of ['male','female'].entries()){const response=await call('/api/auth/register',{method:'POST',body:{name:'Тестовый участник',email:'profile'+i+'@test.example',password:'profile-test-password',gender,adult:true,terms:true}});assert.equal(response.status,201);accounts.push({cookie:response.headers.get('set-cookie').split(';')[0],id:app.sqlite.prepare('SELECT id FROM auth_accounts WHERE email=?').get('profile'+i+'@test.example').id});}
  const [a,b]=accounts;
  assert.equal((await call('/api/ml-profile')).status,401);
  assert.equal((await call('/api/ml-profile?user='+b.id,{cookie:a.cookie})).status,404);
@@ -35,7 +35,7 @@ test('Profiles support manual creation, protected AI merges, gallery access and 
  const visitor=await(await call('/api/ml-profile?user='+a.id,{cookie:b.cookie})).json();assert.equal(visitor.photos.length,2);assert.equal(visitor.own,false);assert.ok(!('locked' in visitor));assert.ok(!('source' in visitor));assert.equal(visitor.profile.self.bio,'Люблю лес и кофе');
  assert.equal((await call(visitor.photos[1].url,{cookie:b.cookie})).status,200);assert.equal((await call('/api/profile-photo?user='+a.id+'&id=foreign',{cookie:b.cookie})).status,404);
  app.sqlite.prepare('INSERT INTO blocks VALUES(?,?,?)').run(a.id,b.id,new Date().toISOString());assert.equal((await call('/api/ml-profile?user='+a.id,{cookie:b.cookie})).status,404);assert.equal((await call(visitor.photos[1].url,{cookie:b.cookie})).status,404);app.sqlite.prepare('DELETE FROM blocks').run();
- app.sqlite.prepare('DELETE FROM auth_accounts WHERE id=?').run(a.id);assert.equal(app.sqlite.prepare('SELECT COUNT(*) AS n FROM matchlove_profile_overrides').get().n,0);
+ app.sqlite.prepare('DELETE FROM auth_accounts WHERE id=?').run(a.id);assert.equal(app.sqlite.prepare('SELECT COUNT(*) AS n FROM matchlove_profile_overrides WHERE user=?').get(a.id).n,0);
  }finally{app.server.closeAllConnections();await new Promise(r=>app.server.close(r));await rm(dir,{recursive:true,force:true});}
 });
 test('AI wishes stored in preferences become editable category tags without resurrecting manual deletions',async()=>{

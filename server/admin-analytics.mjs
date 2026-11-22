@@ -58,9 +58,9 @@ export async function handleAnalytics(request,{sqlite:db,userId,adminIds='',now=
  }
  if(url.pathname==='/api/admin/users'){
   const query=String(url.searchParams.get('q')||'').trim().slice(0,120),needle=query.toLocaleLowerCase('ru');
-  const found=needle?all("SELECT a.id,a.email,COALESCE(json_extract(p.parsed,'$.self.name'),'') AS name FROM auth_accounts a LEFT JOIN matchlove_profiles p ON p.user=a.id ORDER BY a.created DESC").filter(u=>[u.id,u.email,u.name].some(v=>String(v).toLocaleLowerCase('ru').includes(needle))).slice(0,100).map(u=>u.id):[];
+  const found=needle?all("SELECT a.id,a.email,COALESCE(json_extract(p.parsed,'$.self.name'),(SELECT json_extract(o.data,'$.self.name') FROM matchlove_profile_overrides o WHERE o.user=a.id),'') AS name FROM auth_accounts a LEFT JOIN matchlove_profiles p ON p.user=a.id ORDER BY a.created DESC").filter(u=>[u.id,u.email,u.name].some(v=>String(v).toLocaleLowerCase('ru').includes(needle))).slice(0,100).map(u=>u.id):[];
   const searchClause=needle?' AND a.id IN ('+(found.length?found.map(()=>'?').join(','):'NULL')+')':'';
-  const users=all(`SELECT a.id,a.email,a.gender,a.created,EXISTS(SELECT 1 FROM matchlove_account_bans ban WHERE ban.user=a.id) AS banned,COALESCE(NULLIF(json_extract(p.parsed,'$.self.name'),''),'Участник') AS name,p.user IS NOT NULL AS profile,
+  const users=all(`SELECT a.id,a.email,a.gender,a.created,EXISTS(SELECT 1 FROM matchlove_account_bans ban WHERE ban.user=a.id) AS banned,COALESCE(NULLIF(json_extract(p.parsed,'$.self.name'),''),(SELECT json_extract(o.data,'$.self.name') FROM matchlove_profile_overrides o WHERE o.user=a.id),'Участник') AS name,p.user IS NOT NULL AS profile,
    (SELECT MAX(seen) FROM analytics_sessions WHERE user=a.id) AS last_seen,
    (SELECT COALESCE(SUM(active_seconds),0) FROM analytics_sessions WHERE user=a.id) AS active_seconds,
    (SELECT COUNT(*) FROM likes WHERE sender=a.id) AS likes,

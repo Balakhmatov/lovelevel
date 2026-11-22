@@ -18,7 +18,7 @@ test('Same city raises score, unrelated Novgorods do not match, and shorter dist
 test('Location requires login and explicit consent, stores coarse coordinates and never returns them in metadata',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'ml-geo-')),origin='http://127.0.0.1:3118',app=createServer({origin,dataDir:dir,secureCookies:false,registration:true});app.server.listen(0,'127.0.0.1');await once(app.server,'listening');const base='http://127.0.0.1:'+app.server.address().port;
  const call=(path,{method='GET',cookie,body,requestOrigin=origin}={})=>fetch(base+path,{method,headers:{Origin:requestOrigin,'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:body?JSON.stringify(body):undefined});
- try{let r=await call('/api/auth/register',{method:'POST',body:{email:'geo@example.test',password:'geo-test-password',adult:true,terms:true,gender:'male'}});const cookie=r.headers.get('set-cookie').split(';')[0];
+ try{let r=await call('/api/auth/register',{method:'POST',body:{name:'Тестовый участник',email:'geo@example.test',password:'geo-test-password',adult:true,terms:true,gender:'male'}});const cookie=r.headers.get('set-cookie').split(';')[0];
  assert.equal((await call('/api/location')).status,401);
  assert.equal((await call('/api/location',{cookie,method:'PATCH',body:{latitude:55.7558,longitude:37.6173}})).status,400);
  assert.equal((await call('/api/location',{cookie,method:'PATCH',requestOrigin:'https://other.test',body:{city:'Москва'}})).status,403);
