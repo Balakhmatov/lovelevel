@@ -1,0 +1,3 @@
+export const ZODIAC_SIGNS=['Овен','Телец','Близнецы','Рак','Лев','Дева','Весы','Скорпион','Стрелец','Козерог','Водолей','Рыбы'];
+export function zodiacSigns(value){return [...new Set((Array.isArray(value)?value:typeof value==='string'?[value]:[]).map(v=>ZODIAC_SIGNS.find(sign=>sign.toLocaleLowerCase('ru')===String(v).trim().toLocaleLowerCase('ru'))).filter(Boolean))];}
+export function zodiacComparison(viewer,candidate){const wanted=zodiacSigns(viewer?.wanted?.zodiac),actual=zodiacSigns(candidate?.self?.zodiac)[0];if(!wanted.length)return null;if(!actual)return null;return {status:wanted.includes(actual)?'match':'mismatch',label:actual,expected:wanted};}

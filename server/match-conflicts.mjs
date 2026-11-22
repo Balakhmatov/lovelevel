@@ -1,3 +1,4 @@
+import {zodiacComparison} from './zodiac.mjs';
 const norm=s=>String(s||'').trim().toLowerCase().replace(/ё/g,'е');
 const list=(p,k)=>[...new Set([...(Array.isArray(p?.[k])?p[k]:[]),...(p?.preferences||[]).filter(v=>v.category===k).flatMap(v=>v.preferred||[])])];
 export function habitState(text){
@@ -34,5 +35,6 @@ export function findConflicts(viewer,candidate,evidence=[]){
   if(e.category==='habits'&&expected&&actual&&expected.kind===actual.kind&&expected.value===actual.value)continue;
   add(e.category,e.candidateEvidence,e.wantedEvidence);
  }
+ const zodiac=zodiacComparison(viewer,candidate);if(zodiac?.status==='mismatch')add('zodiac',zodiac.label,zodiac.expected.join(', '),'Ты ищешь знак: '+zodiac.expected.join(', '));
  return flags;
 }

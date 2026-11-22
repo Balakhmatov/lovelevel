@@ -1,3 +1,4 @@
+import {ZODIAC_SIGNS,zodiacSigns,zodiacComparison} from './zodiac.mjs';
 import {findConflicts} from './match-conflicts.mjs';
 import {SCORING_VERSION,criteria} from './match-scoring.mjs';
 import {searchSettings} from './search-settings.mjs';
@@ -5,7 +6,7 @@ import {randomUUID} from 'node:crypto';
 import {updateTagUsage} from './tag-suggestions.mjs';
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 export const PROFILE_LISTS=['goal','interests','habits','personality','profession','appearance','sexual_preferences'];
-const EMPTY={name:'',bio:'',age_min:null,age_max:null,location:'',gender:'',preferences:[],...Object.fromEntries(PROFILE_LISTS.map(k=>[k,[]]))};
+const EMPTY={name:'',bio:'',age_min:null,age_max:null,location:'',gender:'',zodiac:[],preferences:[],...Object.fromEntries(PROFILE_LISTS.map(k=>[k,[]]))};
 export function mergeManualProfile(parsed,overrides={}){
  const result={...parsed,self:{...EMPTY,...parsed.self,...overrides.self},wanted:{...EMPTY,...parsed.wanted,...overrides.wanted}};
  // A manually replaced category must also replace AI-generated preference clauses for it.
@@ -21,7 +22,8 @@ function validate(side,patch){
  if(!patch||typeof patch!=='object'||Array.isArray(patch))throw Error('Некорректные поля анкеты');
  const result={};
  for(const [key,value] of Object.entries(patch)){
-  if(PROFILE_LISTS.includes(key)){if(!Array.isArray(value)||value.length>30||value.some(v=>typeof v!=='string'||v.length>80))throw Error('Не больше 30 пунктов по 80 символов');result[key]=[...new Set(value.map(v=>v.trim()).filter(Boolean))];}
+  if(key==='zodiac'){if(!Array.isArray(value)||value.length>(side==='self'?1:12)||value.some(v=>!ZODIAC_SIGNS.includes(v)))throw Error('Выбери знак зодиака из списка');result[key]=zodiacSigns(value);}
+  else if(PROFILE_LISTS.includes(key)){if(!Array.isArray(value)||value.length>30||value.some(v=>typeof v!=='string'||v.length>80))throw Error('Не больше 30 пунктов по 80 символов');result[key]=[...new Set(value.map(v=>v.trim()).filter(Boolean))];}
   else if(['age_min','age_max'].includes(key)){if(value!==null&&(!Number.isInteger(value)||value<18||value>100))throw Error('Возраст — от 18 до 100 лет');result[key]=value;}
   else if(['bio','location','name'].includes(key)){if(key==='name'&&side!=='self')throw Error('Некорректное поле');if(typeof value!=='string'||value.length>({bio:1200,location:90,name:60}[key]))throw Error('Слишком длинное поле');result[key]=value.trim();}
   else if(key==='gender'&&side==='wanted'){if(!['','male','female','all'].includes(value))throw Error('Выбери пол');result[key]=value;}
@@ -40,8 +42,8 @@ export async function handleProfile(request,{sqlite:db,userId}){
   const photos=db.prepare('SELECT id,is_main FROM matchlove_photos WHERE user=? ORDER BY is_main DESC,created,id').all(target).map(p=>({id:p.id,main:!!p.is_main,url:'/api/profile-photo?user='+encodeURIComponent(target)+'&id='+encodeURIComponent(p.id)}));
   const own=target===userId;
   const locked=own?JSON.parse(db.prepare('SELECT data FROM matchlove_profile_overrides WHERE user=?').get(target)?.data||'{}'):undefined;
-  let conflicts=[];if(!own){const mine=db.prepare('SELECT parsed,updated FROM matchlove_profiles WHERE user=?').get(userId);if(mine){let evidence=[];const cached=db.prepare('SELECT evidence FROM matchlove_ai_cache WHERE viewer=? AND candidate=? AND viewer_updated=? AND candidate_updated=? AND scoring_version=?').get(userId,target,mine.updated,row.updated,SCORING_VERSION);try{const items=JSON.parse(cached?.evidence||'[]');if(Array.isArray(items))evidence=items;}catch{}conflicts=findConflicts(JSON.parse(mine.parsed),profile,evidence);}}
-  return json({id:target,own,conflicts,name:profile.self.name||classic?.name||'Участник '+target.slice(0,4),city:profile.self.location||classic?.city||'',profile,photos,...(own?{locked,searchSettings:searchSettings(db,userId)}:{})});
+  let zodiacMatch=null,conflicts=[];if(!own){const mine=db.prepare('SELECT parsed,updated FROM matchlove_profiles WHERE user=?').get(userId);if(mine){let evidence=[];const cached=db.prepare('SELECT evidence FROM matchlove_ai_cache WHERE viewer=? AND candidate=? AND viewer_updated=? AND candidate_updated=? AND scoring_version=?').get(userId,target,mine.updated,row.updated,SCORING_VERSION);try{const items=JSON.parse(cached?.evidence||'[]');if(Array.isArray(items))evidence=items;}catch{}conflicts=findConflicts(JSON.parse(mine.parsed),profile,evidence);zodiacMatch=zodiacComparison(JSON.parse(mine.parsed),profile);}}
+  return json({id:target,own,conflicts,zodiacMatch,name:profile.self.name||classic?.name||'Участник '+target.slice(0,4),city:profile.self.location||classic?.city||'',profile,photos,...(own?{locked,searchSettings:searchSettings(db,userId)}:{})});
  }
  if(request.method!=='PATCH')return json({error:'Метод недоступен'},405);
  if(target!==userId)return json({error:'Можно редактировать только свою анкету'},403);

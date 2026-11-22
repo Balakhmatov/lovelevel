@@ -1,3 +1,4 @@
+import {zodiacComparison} from './zodiac.mjs';
 import {cosine,tagKey} from './matchlove-embeddings.mjs';
 import {findConflicts,habitLabel,habitState} from './match-conflicts.mjs';
 import {locationMatch} from './matching-location.mjs';
@@ -74,7 +75,7 @@ export function scoreEvidence(a,b,evidence=[],vectors=new Map()){
  const proximity=locationMatch(a,b);if(proximity.units>0)raw.push({category:'location',label:proximity.label,units:proximity.units});
  const result=finish(raw);
  const knownDirections=[{wanted:a.wanted||{}},{wanted:b.wanted||{}}].filter(d=>Object.keys(WEIGHTS).some(k=>k==='age'?(d.wanted.age_min!=null||d.wanted.age_max!=null):criteria(d.wanted,k).length));
- return {...result,conflicts,distanceKm:proximity.distanceKm,confidence:0,mutual:knownDirections.length===2,location:proximity.location,explanation:'',reasons:result.matches.map(m=>m.label)};
+ return {...result,conflicts,zodiacMatch:zodiacComparison(a,b),distanceKm:proximity.distanceKm,confidence:0,mutual:knownDirections.length===2,location:proximity.location,explanation:'',reasons:result.matches.map(m=>m.label)};
 }
 export function rankMatch(a,b){return scoreEvidence(a,b);}
 export function semanticProfile(p){return {self:p.self,wanted:p.wanted,criteria:Object.fromEntries(SEMANTIC_FIELDS.map(k=>[k,criteria(p.wanted||{},k).length?criteria(p.wanted||{},k):criteria(p.self||{},k)]))};}
