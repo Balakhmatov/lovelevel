@@ -1,0 +1,3 @@
+const TAG_FIELDS=['goal','interests','habits','personality','profession','appearance','sexual_preferences'];
+export function profileTagCount(profile){let count=0;for(const side of ['self','wanted'])for(const field of TAG_FIELDS){const items=profile?.[side]?.[field];if(Array.isArray(items))count+=new Set(items.filter(v=>typeof v==='string').map(v=>v.trim().toLocaleLowerCase('ru')).filter(Boolean)).size;}return count;}
+export function savedSearchReady(db,user){const row=db.prepare('SELECT source,parsed FROM matchlove_profiles WHERE user=?').get(user);if(!row)return false;let profile;try{profile=JSON.parse(row.parsed);}catch{return false;}return String(row.source||'').trim().length>=70||profileTagCount(profile)>=7;}

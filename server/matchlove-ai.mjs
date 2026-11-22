@@ -1,3 +1,4 @@
+import {profileTagCount} from './search-eligibility.mjs';
 import {randomUUID} from 'node:crypto';
 import {parseProfile,PROFILE_SCHEMA_VERSION,MAX_PROFILE_TEXT} from './profile-parser.mjs';
 import {applyManualProfile} from './matchlove-profile.mjs';
@@ -43,7 +44,7 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model,candidat
   if(request.headers.get('origin')!==new URL(request.url).origin)return json({error:'Недопустимый источник запроса'},403);
   const body=await request.json().catch(()=>({}));const source=typeof body.text==='string'?body.text:'';
   if(source.length>MAX_PROFILE_TEXT)return json({error:'Описание получилось слишком длинным. Оставь до 12 000 символов — текст в поле не потеряется.',code:'PROFILE_TOO_LONG'},400);
-  if(source.trim().length<100)return json({error:'Напиши о себе или о том, кого ищешь (не менее 100 символов)'},400);
+  if(source.trim().length<70){const saved=sqlite.prepare('SELECT parsed FROM matchlove_profiles WHERE user=?').get(userId);let profile={};try{profile=JSON.parse(saved?.parsed||'{}');}catch{}if(profileTagCount(profile)>=7)return json({ok:true,manual:true});return json({error:'Напиши описание от 70 символов или добавь минимум 7 тегов в профиль.',code:'SEARCH_INFO_REQUIRED'},400);}
   if(!body.confirmAdult)return json({error:'Доступно только совершеннолетним'},400);
   const requestId=randomUUID(),started=Date.now();let stage='load_profile';
   try{

@@ -22,14 +22,14 @@ function app(text){
 test('Guest search opens auth for empty, one-character, short and oversized text without validating or requesting matches',async()=>{
  for(const text of ['','я','x'.repeat(99),'x'.repeat(12001)]){
   const view=app(text);await view.run('search()');assert(view.modal);assert.equal(view.modal.dataset.searchAuth,'true');assert(view.modal.html.includes('id="auth"'));assert.equal(view.field.value,text);assert(view.storage.has('matchlove-search-draft:guest')||[...view.storage.values()].includes(text));assert.deepEqual(view.notices,[]);assert.deepEqual(view.requests,[]);
-  assert(!view.run('pageHome()').includes('minlength="100"'));
+  assert(!view.run('pageHome()').includes('minlength="70"'));
  }
 });
 test('After successful registration the same short draft hits the existing minimum and stays available',async()=>{
  const view=app('я');await view.run("S.authMode='register';S.photos=[{id:'photo',main:true}];search()");
  const submit=view.listeners.submit.find(fn=>fn.toString().includes("e.target.id==='auth'"));
  await submit({target:{id:'auth'},preventDefault(){}});
- assert.equal(view.modal,null);assert.equal(view.run('S.logged'),true);assert.equal(view.run('S.query'),'я');assert.equal(view.run('S.page'),'home');assert(view.notices.some(text=>text.includes('100')));assert(!view.requests.includes('ai-match'));assert(view.run('pageHome()').includes('minlength="100"'));
+ assert.equal(view.modal,null);assert.equal(view.run('S.logged'),true);assert.equal(view.run('S.query'),'я');assert.equal(view.run('S.page'),'home');assert(view.notices.some(text=>text.includes('70')));assert(!view.requests.includes('ai-match'));assert(view.run('pageHome()').includes('minlength="70"'));
 });
 test('A sufficiently detailed guest draft resumes matching after registration',async()=>{
  const view=app('Описание интересов и пожеланий. '.repeat(6));await view.run("S.authMode='register';S.photos=[{id:'photo',main:true}];search()");
@@ -55,3 +55,7 @@ test('Existing account without saved text does not inherit a guest draft',async(
  const submit=view.listeners.submit.find(fn=>fn.toString().includes("e.target.id==='auth'"));await submit({target:{id:'auth'},preventDefault(){}});
  assert.equal(view.run('S.query'),'');assert.equal(view.field.value,'');assert.equal(view.run('S.page'),'home');assert.equal(view.requests.filter(p=>p==='ai-match').length,1);
 });
+test('Seven profile tags allow searching with empty or short text without an AI parse',async()=>{
+ for(const text of ['', 'я']){const view=app(text);await view.run("S.logged=true;S.me={id:'owner',gender:'male'};S.photos=[{id:'photo',main:true}];const baseAPI=api;api=async(path,opt)=>path==='ml-profile'?{profile:{self:{interests:['1','2','3','4','5','6','7']},wanted:{}}}:baseAPI(path,opt);");await view.run('search()');assert.equal(view.run('S.page'),'results');assert.equal(view.requests.filter(p=>p==='ai-match').length,1);assert.equal(view.run('S.query'),text);}
+});
+test('Six tags and a short description require more information',async()=>{const view=app('я');await view.run("S.logged=true;S.me={id:'owner',gender:'male'};S.photos=[{id:'photo',main:true}];const baseAPI=api;api=async(path,opt)=>path==='ml-profile'?{profile:{self:{interests:['1','2','3','4','5','6']},wanted:{}}}:baseAPI(path,opt);");await view.run('search()');assert.equal(view.run('S.page'),'home');assert(view.notices.some(t=>t.includes('7 тегов')));assert(!view.requests.includes('ai-match'));});
