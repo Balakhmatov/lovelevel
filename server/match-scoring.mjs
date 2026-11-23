@@ -2,7 +2,7 @@ import {zodiacComparison} from './zodiac.mjs';
 import {cosine,tagKey} from './matchlove-embeddings.mjs';
 import {findConflicts,habitLabel,habitState} from './match-conflicts.mjs';
 import {locationMatch} from './matching-location.mjs';
-export const SCORING_VERSION='viewer-v5-conflicts';
+export const SCORING_VERSION='viewer-v6-soft-age';
 // 1 percentage point is reserved for a confirmed gender fit; 10 points are reserved for location, and the remaining 89 follow these proportions.
 // Missing facts never redistribute their unused category budget to the known categories.
 export const WEIGHTS={age:28,goal:24,interests:20,appearance:10,sexual_preferences:7,personality:4,habits:4,profession:3};
@@ -15,6 +15,13 @@ const negative=s=>/(^|\s)(не|нет|без|not|no|without)(\s|$)|ненави�
 const canonical=v=>({мужчина:'male',парень:'male',мужской:'male',man:'male',male:'male',женщина:'female',девушка:'female',женский:'female',woman:'female',female:'female'}[norm(v)]||norm(v));
 export function genderFit(wanted={},self={}){const g=canonical(wanted.gender),s=canonical(self.gender);if(!g||!s||['любой','любая','все','all','не важно'].includes(g))return null;return g===s;}
 export function ageFit(wanted={},self={}){if(wanted.age_min==null&&wanted.age_max==null||self.age_min==null&&self.age_max==null)return null;return (wanted.age_max??100)>=(self.age_min??18)&&(self.age_max??100)>=(wanted.age_min??18);}
+export function agePreferenceFit(wanted={},self={}){
+ if(wanted.age_min==null&&wanted.age_max==null||self.age_min==null&&self.age_max==null)return null;
+ const low=self.age_min??self.age_max,high=self.age_max??self.age_min;
+ const gap=Math.max(0,(wanted.age_min??18)-high,low-(wanted.age_max??100));
+ // Within the requested range: full points. Outside it: lose 10% of the age budget per year.
+ return Math.max(0,1-gap/10);
+}
 export function criteria(p={},category){return unique([...(p[category]||[]),...(p.preferences||[]).filter(v=>v.category===category).flatMap(v=>v.preferred||[])]);}
 function importance(p,category,label){const pref=(p.preferences||[]).find(v=>v.category===category&&(v.preferred||[]).some(x=>norm(x)===norm(label)));return {required:1.7,strong:1.3,normal:1,weak:.6}[pref?.importance]||1;}
 function usableLabel(s){return typeof s==='string'&&s.trim().length>0&&s.length<=100&&!/неизвест|не указ|недостаточ|нет данных|полнота сравнения/i.test(s);}
@@ -52,13 +59,13 @@ export function scoreEvidence(a,b,evidence=[],vectors=new Map()){
   return best;
  };
  const directions=[{key:'viewer',wanted:a.wanted||{},self:b.self||{}}];
- if(directions.some(d=>genderFit(d.wanted,d.self)===false||ageFit(d.wanted,d.self)===false))return null;
+ if(directions.some(d=>genderFit(d.wanted,d.self)===false))return null;
  const raw=[];if(directions.some(d=>genderFit(d.wanted,d.self)===true))raw.push({category:'gender',label:'Подходящий пол',units:100});
  for(const [category,weight] of Object.entries(WEIGHTS)){
   const budget=weight*89;
   if(category==='age'){
    const requested=directions.filter(d=>d.wanted.age_min!=null||d.wanted.age_max!=null);
-   for(const d of requested)if(ageFit(d.wanted,d.self)===true){const min=d.wanted.age_min??18,max=d.wanted.age_max??100;raw.push({category,label:min===max?'Возраст '+min+' лет':'Возраст '+min+'–'+max+' лет',units:budget/requested.length});}
+   for(const d of requested){const fit=agePreferenceFit(d.wanted,d.self);if(fit>0){const min=d.wanted.age_min??18,max=d.wanted.age_max??100;raw.push({category,label:min===max?'Возраст '+min+' лет':'Возраст '+min+'–'+max+' лет',units:budget/requested.length*fit});}}
    if(!requested.length){const x=a.self?.age_min,y=b.self?.age_min;if(x!=null&&y!=null){const fit=Math.max(0,Math.min(1,(15-Math.abs(x-y))/10));if(fit>0)raw.push({category,label:'Близкий возраст',units:budget*fit});}}continue;
   }
   const requested=directions.filter(d=>criteria(d.wanted,category).length);

@@ -16,9 +16,9 @@ test('Every tag contribution sums exactly to the headline; a fully matched profi
  const fields={age_min:30,age_max:30};for(const field of Object.keys(WEIGHTS).filter(k=>k!=='age'))fields[field]=['первый вариант','второй вариант','третий вариант'];const [a,b]=pair(fields,fields);a.self.location=b.self.location='Москва';const r=scoreEvidence(a,b);assert.equal(r.score,100);assert.equal(sum(r),100);assert.ok(r.matches.every(m=>m.points>0));
 });
 test('Multiple criteria split a category budget; matching one cannot earn all the category points',()=>{const r=scoreEvidence(...pair({interests:['путешествия','ночные поездки']},{interests:['путешествия']}));assert.equal(r.score,9.9);assert.equal(sum(r),r.score);assert.ok(!r.matches.some(m=>m.label==='ночные поездки'));});
-test('Negations do not count as a lexical match and hard constraints still exclude',()=>{
+test('Negations do not count as a lexical match; gender excludes while age only affects points',()=>{
  assert.equal(scoreEvidence(...pair({interests:['курю']},{interests:['не курю']})).score,1);
- assert.equal(scoreEvidence(...pair({age_min:25,age_max:30},{age_min:40,age_max:40})),null);
+ assert.equal(scoreEvidence(...pair({age_min:25,age_max:30},{age_min:40,age_max:40})).score,1);
  assert.equal(scoreEvidence(...pair({}, {gender:'male'})),null);
 });
 test('Extra candidate hobbies do not dilute the searching person category budget',()=>{
@@ -83,4 +83,11 @@ test('Semantic conflicts require real viewer wishes, real candidate facts and ex
 test('Explicitly excluded facts never earn fallback points just because the viewer also has them',()=>{
  const [a,b]=pair({}, {habits:['курю']});a.self.habits=['курю'];a.wanted.preferences=[{category:'habits',preferred:[],excluded:['курю']}];
  const result=scoreEvidence(a,b);assert.equal(result.score,1);assert.equal(result.conflicts[0].label,'Курит');assert.ok(!result.matches.some(m=>m.category==='habits'));
+});
+test('Explicit age preferences fade smoothly outside both boundaries without hiding a candidate',()=>{
+ const viewer={self:p({gender:'male'}),wanted:p({gender:'female',age_min:25,age_max:35})};const score=age=>scoreEvidence(viewer,{self:p({gender:'female',age_min:age,age_max:age}),wanted:p()});
+ const agePoints=age=>score(age).matches.filter(m=>m.category==='age').reduce((sum,m)=>sum+m.points,0);
+ assert.equal(agePoints(25),24.92);assert.equal(agePoints(35),24.92);assert.equal(agePoints(24),22.43);assert.equal(agePoints(36),22.43);assert.equal(agePoints(20),12.46);assert.equal(agePoints(40),12.46);assert.equal(agePoints(45),0);assert.equal(score(70).score,1);
+ for(const age of [18,24,25,35,36,40,45,70])assert.equal(Math.round(sum(score(age))*100),Math.round(score(age).score*100));
+ const unknown=scoreEvidence(viewer,{self:p({gender:'female'}),wanted:p()});assert.equal(unknown.score,1);
 });

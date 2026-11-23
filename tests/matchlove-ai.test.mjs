@@ -7,10 +7,10 @@ test('one sided wishes match the other person self description',()=>{
  const woman={self:p({age_min:26,age_max:26,gender:'женщина'}),wanted:p({age_min:27,age_max:40,gender:'мужчина',appearance:['голубые глаза','светлые волосы']})};
  const result=rankMatch(woman,man);assert.ok(result);assert.equal(result.mutual,false);assert.equal(result.score,34.82);assert.equal(rankMatch(man,woman).score,24.92);assert.equal(Math.round(result.matches.reduce((n,m)=>n+m.points,0)*100)/100,result.score);
 });
-test('explicit age bounds exclude ineligible candidate',()=>{
+test('explicit age bounds never exclude candidates but distant ages earn no age points',()=>{
  const a={self:p({age_min:20,age_max:20}),wanted:p({age_min:25,age_max:35})};
  const b={self:p({age_min:60,age_max:60}),wanted:p()};
- assert.equal(rankMatch(a,b),null);
+ assert.equal(rankMatch(a,b).score,0);assert.equal(rankMatch(a,b).matches.some(m=>m.category==='age'),false);
 });
 test('declared desired gender excludes wrong gender',()=>{
  const a={self:p({gender:'женщина'}),wanted:p({gender:'мужчина'})};
