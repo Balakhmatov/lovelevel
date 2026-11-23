@@ -1,3 +1,4 @@
+import {matchVisibility} from './match-visibility.mjs';
 import {randomUUID} from 'node:crypto';
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
 const validId=x=>typeof x==='string'&&/^[a-zA-Z0-9_-]{16,64}$/.test(x);
@@ -51,6 +52,10 @@ export async function handleAnalytics(request,{sqlite:db,userId,adminIds='',now=
  const excluded=adminList.length?adminList:[''];const marks=excluded.map(()=>'?').join(',');
  const one=(sql,...args)=>db.prepare(sql).get(...args),all=(sql,...args)=>db.prepare(sql).all(...args);
  const sessionFilter=`(user IS NULL OR user NOT IN (${marks}))`;
+ if(url.pathname==='/api/admin/match-check'){
+  const target=url.searchParams.get('user')||'';if(!db.prepare('SELECT 1 FROM auth_accounts WHERE id=?').get(target))return json({error:'Пользователь не найден'},404);
+  const result=matchVisibility(db,userId,target);db.prepare('INSERT INTO audits(id,actor,action,target,created) VALUES(?,?,?,?,?)').run(randomUUID(),userId,'check_match_visibility',target,new Date(now).toISOString());return json(result);
+ }
  if(url.pathname==='/api/admin/messages'){
   const target=url.searchParams.get('user')||'';if(!db.prepare('SELECT 1 FROM auth_accounts WHERE id=?').get(target))return json({error:'Пользователь не найден'},404);
   const messages=all('SELECT id,sender,recipient,body,created FROM messages WHERE sender=? OR recipient=? ORDER BY created DESC,id DESC LIMIT 100',target,target).reverse();

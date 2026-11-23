@@ -85,7 +85,7 @@ export function createServer({origin,dataDir,secureCookies=true,registration=fal
    if(path.pathname==='/api/telegram/webhook')response=await botMenu(request,{token:telegramBotToken,origin});
    else if(path.pathname.startsWith('/api/auth/'))response=await auth.route(request,ip);
    else if(['/api/search-photo','/api/search-photo-info','/api/profile-photo'].includes(path.pathname))response=await handleSearchPhoto(request,{sqlite,userId:identity?.id});
-   else if(['/api/analytics','/api/admin/analytics','/api/admin/users','/api/admin/messages'].includes(path.pathname))response=await handleAnalytics(request,{sqlite,userId:identity?.id,adminIds,ip});
+   else if(['/api/analytics','/api/admin/analytics','/api/admin/users','/api/admin/messages','/api/admin/match-check'].includes(path.pathname))response=await handleAnalytics(request,{sqlite,userId:identity?.id,adminIds,ip});
    else if(['/api/block','/api/unblock','/api/blocks','/api/report'].includes(path.pathname))response=await handleModeration(request,{sqlite,userId:identity?.id});
    else if(path.pathname==='/api/admin/ban')response=await handleAccountBan(request,{sqlite,userId:identity?.id,adminIds});
    else if(path.pathname==='/api/ml-search-draft')response=await handleSearchDraft(request,{sqlite,userId:identity?.id});

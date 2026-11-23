@@ -13,8 +13,8 @@ const tokens=s=>new Set((norm(s).match(/[а-яa-z0-9]{3,}/g)||[]).map(x=>x.repla
 function lexical(a,b){if(norm(a)===norm(b))return 1;const neg=s=>/(^|\s)(не|нет|без|not|no|without)(\s|$)/i.test(s);if(neg(a)!==neg(b))return 0;const x=tokens(a),y=tokens(b);if(!x.size||!y.size)return 0;const common=[...x].filter(t=>y.has(t)).length;const value=common/Math.max(x.size,y.size);return value>=.6?value:0;}
 const negative=s=>/(^|\s)(не|нет|без|not|no|without)(\s|$)|ненавиж|неперенос|неприемл/i.test(s);
 const canonical=v=>({мужчина:'male',парень:'male',мужской:'male',man:'male',male:'male',женщина:'female',девушка:'female',женский:'female',woman:'female',female:'female'}[norm(v)]||norm(v));
-function genderFit(wanted={},self={}){const g=canonical(wanted.gender),s=canonical(self.gender);if(!g||!s||['любой','любая','все','all','не важно'].includes(g))return null;return g===s;}
-function ageFit(wanted={},self={}){if(wanted.age_min==null&&wanted.age_max==null||self.age_min==null&&self.age_max==null)return null;return (wanted.age_max??100)>=(self.age_min??18)&&(self.age_max??100)>=(wanted.age_min??18);}
+export function genderFit(wanted={},self={}){const g=canonical(wanted.gender),s=canonical(self.gender);if(!g||!s||['любой','любая','все','all','не важно'].includes(g))return null;return g===s;}
+export function ageFit(wanted={},self={}){if(wanted.age_min==null&&wanted.age_max==null||self.age_min==null&&self.age_max==null)return null;return (wanted.age_max??100)>=(self.age_min??18)&&(self.age_max??100)>=(wanted.age_min??18);}
 export function criteria(p={},category){return unique([...(p[category]||[]),...(p.preferences||[]).filter(v=>v.category===category).flatMap(v=>v.preferred||[])]);}
 function importance(p,category,label){const pref=(p.preferences||[]).find(v=>v.category===category&&(v.preferred||[]).some(x=>norm(x)===norm(label)));return {required:1.7,strong:1.3,normal:1,weak:.6}[pref?.importance]||1;}
 function usableLabel(s){return typeof s==='string'&&s.trim().length>0&&s.length<=100&&!/неизвест|не указ|недостаточ|нет данных|полнота сравнения/i.test(s);}
