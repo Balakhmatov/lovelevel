@@ -1,3 +1,4 @@
+import {validAdultBirthdate} from './birthdate.mjs';
 import {accountBanned} from './account-bans.mjs';
 import {createTelegramAuth} from './telegram.mjs';
 import {randomBytes,randomUUID,createHash,scrypt as rawScrypt,timingSafeEqual} from 'node:crypto';
@@ -51,7 +52,8 @@ export function createAuth(sqlite,{origin,secure=true,registration=true,inviteCo
    if(!validPassword(b.password)||b.adult!==true||b.terms!==true)return json({error:'Пароль: 10–128 символов. Подтвердите возраст 18+ и правила.'},400);
    if(!['male','female'].includes(b.gender))return json({error:'Выбери пол'},400);
    const name=typeof b.name==='string'?b.name.trim().replace(/\s+/g,' '):'';if(!name||name.length>60||/[\p{Cc}\p{Cf}]/u.test(b.name))return json({error:'Укажи имя: от 1 до 60 символов'},400);
-   activeHashes++;try{const hash=await hashPassword(b.password),id=randomUUID();try{sqlite.exec('BEGIN IMMEDIATE');sqlite.prepare('INSERT INTO auth_accounts(id,email,password_hash,created,gender) VALUES(?,?,?,?,?)').run(id,email,hash,now(),b.gender);sqlite.prepare('INSERT INTO matchlove_profile_overrides(user,data) VALUES(?,?)').run(id,JSON.stringify({self:{name}}));sqlite.exec('COMMIT');}catch(error){try{sqlite.exec('ROLLBACK');}catch{}if(error.code?.startsWith('ERR_SQLITE')&&sqlite.prepare('SELECT 1 FROM auth_accounts WHERE email=?').get(email))return json({error:'Не удалось создать аккаунт. Попробуйте войти или обратитесь в поддержку.'},409);throw error;}return signedIn(id,b,201);}finally{activeHashes--;}
+   if(!validAdultBirthdate(b.birthdate,now()))return json({error:'Укажи корректную дату рождения. Сервис доступен с 18 лет (возраст до 100 лет).'},400);
+   activeHashes++;try{const hash=await hashPassword(b.password),id=randomUUID();try{sqlite.exec('BEGIN IMMEDIATE');sqlite.prepare('INSERT INTO auth_accounts(id,email,password_hash,created,gender) VALUES(?,?,?,?,?)').run(id,email,hash,now(),b.gender);sqlite.prepare('INSERT INTO matchlove_profile_overrides(user,data) VALUES(?,?)').run(id,JSON.stringify({self:{name}}));sqlite.prepare('INSERT INTO matchlove_birthdates(user,birthdate) VALUES(?,?)').run(id,b.birthdate);sqlite.exec('COMMIT');}catch(error){try{sqlite.exec('ROLLBACK');}catch{}if(error.code?.startsWith('ERR_SQLITE')&&sqlite.prepare('SELECT 1 FROM auth_accounts WHERE email=?').get(email))return json({error:'Не удалось создать аккаунт. Попробуйте войти или обратитесь в поддержку.'},409);throw error;}return signedIn(id,b,201);}finally{activeHashes--;}
   }
   activeHashes++;try{const account=sqlite.prepare('SELECT id,password_hash FROM auth_accounts WHERE email=?').get(email);const correct=await verifyPassword(b.password,account?.password_hash||dummy);if(!account||!correct)return json({error:'Неверный email или пароль'},401);return signedIn(account.id,b);}finally{activeHashes--;}
  }

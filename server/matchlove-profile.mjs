@@ -1,3 +1,4 @@
+import {accountBirthdate,withAccountAge,fullYears} from './birthdate.mjs';
 import {ZODIAC_SIGNS,zodiacSigns,zodiacComparison} from './zodiac.mjs';
 import {findConflicts} from './match-conflicts.mjs';
 import {SCORING_VERSION,criteria} from './match-scoring.mjs';
@@ -16,7 +17,7 @@ export function mergeManualProfile(parsed,overrides={}){
  if(Object.hasOwn(overrides.wanted||{},'gender'))result.genderPreferenceExplicit=!!overrides.wanted.gender;
  return result;
 }
-export function applyManualProfile(db,user,parsed){const row=db.prepare('SELECT data FROM matchlove_profile_overrides WHERE user=?').get(user);return mergeManualProfile(parsed,row?JSON.parse(row.data):{});}
+export function applyManualProfile(db,user,parsed){const row=db.prepare('SELECT data FROM matchlove_profile_overrides WHERE user=?').get(user);return withAccountAge(db,user,mergeManualProfile(parsed,row?JSON.parse(row.data):{}));}
 export function canViewProfile(db,viewer,target){return target===viewer||!db.prepare('SELECT 1 FROM matchlove_account_bans WHERE user=?').get(target)&&!!db.prepare('SELECT 1 FROM matchlove_profiles WHERE user=?').get(target)&&!db.prepare('SELECT 1 FROM profiles WHERE id=? AND paused=1').get(target)&&!db.prepare('SELECT 1 FROM blocks WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)').get(viewer,target,target,viewer);}
 function validate(side,patch){
  if(!patch||typeof patch!=='object'||Array.isArray(patch))throw Error('Некорректные поля анкеты');
@@ -43,17 +44,18 @@ export async function handleProfile(request,{sqlite:db,userId}){
   const own=target===userId;
   const locked=own?JSON.parse(db.prepare('SELECT data FROM matchlove_profile_overrides WHERE user=?').get(target)?.data||'{}'):undefined;
   let zodiacMatch=null,conflicts=[];if(!own){const mine=db.prepare('SELECT parsed,updated FROM matchlove_profiles WHERE user=?').get(userId);if(mine){let evidence=[];const cached=db.prepare('SELECT evidence FROM matchlove_ai_cache WHERE viewer=? AND candidate=? AND viewer_updated=? AND candidate_updated=? AND scoring_version=?').get(userId,target,mine.updated,row.updated,SCORING_VERSION);try{const items=JSON.parse(cached?.evidence||'[]');if(Array.isArray(items))evidence=items;}catch{}conflicts=findConflicts(JSON.parse(mine.parsed),profile,evidence);zodiacMatch=zodiacComparison(JSON.parse(mine.parsed),profile);}}
-  return json({id:target,own,conflicts,zodiacMatch,name:profile.self.name||classic?.name||'Участник '+target.slice(0,4),city:profile.self.location||classic?.city||'',profile,photos,...(own?{locked,searchSettings:searchSettings(db,userId)}:{})});
+  return json({id:target,own,conflicts,zodiacMatch,name:profile.self.name||classic?.name||'Участник '+target.slice(0,4),city:profile.self.location||classic?.city||'',profile,photos,...(own?{locked,birthdate:accountBirthdate(db,userId),searchSettings:searchSettings(db,userId)}:{})});
  }
  if(request.method!=='PATCH')return json({error:'Метод недоступен'},405);
  if(target!==userId)return json({error:'Можно редактировать только свою анкету'},403);
  if(request.headers.get('origin')!==url.origin)return json({error:'Недопустимый источник'},403);
  let body;try{body=await request.json();}catch{return json({error:'Некорректный запрос'},400);}
  let patches={};try{if(!body||typeof body!=='object'||!Object.keys(body).length||Object.keys(body).some(k=>!['self','wanted'].includes(k)))throw Error('Выбери поля анкеты');for(const side of Object.keys(body))patches[side]=validate(side,body[side]);}catch(error){return json({error:error.message},400);}
+ const registeredAge=fullYears(accountBirthdate(db,userId));if(registeredAge!==null&&patches.self){for(const key of ['age_min','age_max'])if(key in patches.self){if(patches.self[key]!==registeredAge)return json({error:'Возраст рассчитывается по дате рождения, указанной при регистрации.'},400);delete patches.self[key];}}
  const existing=db.prepare('SELECT * FROM matchlove_profiles WHERE user=?').get(userId),old=existing?JSON.parse(existing.parsed):{};
  const previous=JSON.parse(db.prepare('SELECT data FROM matchlove_profile_overrides WHERE user=?').get(userId)?.data||'{}');
  const overrides={self:{...previous.self,...patches.self},wanted:{...previous.wanted,...patches.wanted}};
- const profile=mergeManualProfile(old,overrides);profile.self.gender=db.prepare('SELECT gender FROM auth_accounts WHERE id=?').get(userId)?.gender||'';
+ const profile=withAccountAge(db,userId,mergeManualProfile(old,overrides));profile.self.gender=db.prepare('SELECT gender FROM auth_accounts WHERE id=?').get(userId)?.gender||'';
  for(const side of ['self','wanted'])if(profile[side].age_min!=null&&profile[side].age_max!=null&&profile[side].age_min>profile[side].age_max)return json({error:'Начало возраста должно быть не больше конца'},400);
  const updated=new Date().toISOString()+'-'+randomUUID();
  db.exec('BEGIN IMMEDIATE');try{

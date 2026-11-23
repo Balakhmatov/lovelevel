@@ -1,3 +1,4 @@
+import {fullYears} from './birthdate.mjs';
 import {profileTagCount} from './search-eligibility.mjs';
 import {randomUUID} from 'node:crypto';
 import {parseProfile,PROFILE_SCHEMA_VERSION,MAX_PROFILE_TEXT} from './profile-parser.mjs';
@@ -96,7 +97,7 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model,candidat
   const requestId=randomUUID(),started=Date.now();
   const mine=sqlite.prepare('SELECT source,parsed,updated FROM matchlove_profiles WHERE user=?').get(userId);
   if(!mine)return json({results:[],saved:false});
-  const myself={...applyGenderDefaults(JSON.parse(mine.parsed),sqlite.prepare('SELECT gender FROM auth_accounts WHERE id=?').get(userId)?.gender),matchingLocation:ownLocation(sqlite,userId)};
+  const myself={...applyGenderDefaults(applyManualProfile(sqlite,userId,JSON.parse(mine.parsed)),sqlite.prepare('SELECT gender FROM auth_accounts WHERE id=?').get(userId)?.gender),matchingLocation:ownLocation(sqlite,userId)};
   // Do not limit to "most recent 200" candidates: all eligible users are evaluated and sorted.
   let rows=sqlite.prepare("SELECT m.user,m.parsed,m.updated,v.source_updated AS vector_updated,v.model AS vector_model,v.self_vector,v.wanted_vector,p.name,p.city,p.birthdate,p.gender,a.gender AS account_gender,l.city AS location_city,l.latitude,l.longitude FROM matchlove_profiles m LEFT JOIN auth_accounts a ON a.id=m.user LEFT JOIN matchlove_locations l ON l.user=m.user LEFT JOIN matchlove_vectors v ON v.user=m.user LEFT JOIN profiles p ON p.id=m.user WHERE m.user<>? AND NOT EXISTS(SELECT 1 FROM matchlove_account_bans ban WHERE ban.user=m.user) AND COALESCE(p.paused,0)=0 AND NOT EXISTS(SELECT 1 FROM blocks WHERE (sender=? AND recipient=m.user) OR (recipient=? AND sender=m.user))").all(userId,userId,userId);
   if(candidateIds){const ids=new Set(candidateIds);rows=rows.filter(r=>ids.has(r.user));}
@@ -110,11 +111,11 @@ export async function handleMatchAI(request,{sqlite,userId,apiKey,model,candidat
   const decode=x=>{if(!x)return null;try{const v=JSON.parse(x);return Array.isArray(v)?v:null}catch{return null}};
   const myVectors=myVectorRow&&myVectorRow.source_updated===mine.updated&&myVectorRow.model===embModel?{self:decode(myVectorRow.self_vector),wanted:decode(myVectorRow.wanted_vector)}:null;
   for(const r of rows){
-   let parsed;try{const profile=applyGenderDefaults(JSON.parse(r.parsed),r.account_gender);parsed={...profile,matchingLocation:{city:profile.self?.location||r.location_city||r.city||'',latitude:r.latitude,longitude:r.longitude}}}catch{continue}
+   let parsed;try{const profile=applyGenderDefaults(applyManualProfile(sqlite,r.user,JSON.parse(r.parsed)),r.account_gender);parsed={...profile,matchingLocation:{city:profile.self?.location||r.location_city||r.city||'',latitude:r.latitude,longitude:r.longitude}}}catch{continue}
    const detail=scoreEvidence(myself,parsed,[],tagVectors);if(!detail)continue;
    const candidateVectors=myVectors&&r.vector_updated===r.updated&&r.vector_model===embModel?{self:decode(r.self_vector),wanted:decode(r.wanted_vector)}:null;
    const vectorRelevance=bidirectionalVectors(myVectors,candidateVectors);
-   let age=null;if(r.birthdate){const birth=new Date(r.birthdate);if(Number.isFinite(birth.getTime())){age=new Date().getUTCFullYear()-birth.getUTCFullYear();}}
+   const age=parsed.self?.age_min??fullYears(r.birthdate);
    const stored=sqlite.prepare('SELECT * FROM matchlove_ai_cache WHERE viewer=? AND candidate=? AND viewer_updated=? AND candidate_updated=? AND scoring_version=?').get(userId,r.user,mine.updated,r.updated,SCORING_VERSION);
    const mainPhoto=sqlite.prepare('SELECT id FROM matchlove_photos WHERE user=? AND is_main=1').get(r.user);
    const result={media:mainPhoto?[{url:'/api/profile-photo?user='+encodeURIComponent(r.user),kind:'photo'}]:[],vectorRelevance,id:r.user,name:parsed.self.name||r.name||'Участник '+String(r.user).slice(0,4),city:parsed.self.location||r.location_city||r.city||'',age:age||parsed.self.age_min,score:detail.score,matches:detail.matches,conflicts:detail.conflicts,zodiacMatch:detail.zodiacMatch,distanceKm:detail.distanceKm,confidence:detail.confidence,mutual:detail.mutual,location:detail.location,explanation:detail.explanation};

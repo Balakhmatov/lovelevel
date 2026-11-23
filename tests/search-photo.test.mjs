@@ -13,7 +13,7 @@ test('Gallery converts to WebP, persists, enforces 30, and isolates private and 
  const start=async()=>{app=createServer({origin,dataDir:dir,secureCookies:false,registration:true});app.server.listen(0,'127.0.0.1');await once(app.server,'listening');base='http://127.0.0.1:'+app.server.address().port;};
  const stop=()=>new Promise(resolve=>{app.server.closeAllConnections();app.server.close(resolve)});
  const call=(path,{method='GET',cookie,body,requestOrigin=origin}={})=>fetch(base+path,{method,headers:{Origin:requestOrigin,...(cookie?{Cookie:cookie}:{}),...(body&&!(body instanceof FormData)?{'Content-Type':'application/json'}:{})},body:body instanceof FormData?body:body?JSON.stringify(body):undefined});
- const account=email=>({name:'Тестовый участник',email,password:'photo-test-password',gender:'female',adult:true,terms:true});
+ const account=email=>({name:'Тестовый участник',birthdate:'1995-01-01',email,password:'photo-test-password',gender:'female',adult:true,terms:true});
  const upload=(cookie,bytes=png,mime='image/png',requestOrigin=origin)=>{const form=new FormData();form.set('file',new File([bytes],'photo.png',{type:mime}));return call('/api/search-photo',{method:'POST',cookie,body:form,requestOrigin});};
  try{
   await start();let r=await call('/api/auth/register',{method:'POST',body:account('photo-a@example.test')});assert.equal(r.status,201);let a=r.headers.get('set-cookie').split(';')[0];

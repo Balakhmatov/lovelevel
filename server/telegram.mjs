@@ -1,3 +1,4 @@
+import {validAdultBirthdate} from './birthdate.mjs';
 import {verifyMiniApp} from './miniapp.mjs';
 import {createHash,createHmac,randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
 const digest=s=>createHash('sha256').update(s).digest('hex');
@@ -78,11 +79,13 @@ export function createTelegramAuth(sqlite,{current,newSession,issueSession,consu
     if(inviteCode&&(typeof b.invite!=='string'||!timingSafeEqual(Buffer.from(digest(b.invite)),Buffer.from(digest(inviteCode)))))throw Object.assign(new Error('Нужен код приглашения'),{status:403});
     if(!['male','female'].includes(b.gender))throw Object.assign(new Error('Выбери пол'),{status:400});
     const name=String(b.name??proof.name??'').trim().replace(/\s+/g,' ');if(!name||name.length>60||/[\p{Cc}\p{Cf}]/u.test(name))throw Object.assign(new Error('Укажи имя: от 1 до 60 символов'),{status:400});
+    if(!validAdultBirthdate(b.birthdate,now()))throw Object.assign(new Error('Укажи корректную дату рождения. Сервис доступен с 18 лет (возраст до 100 лет).'),{status:400});
     target=randomUUID();
     // Internal provider key: not an email and rejected by password-login validation.
     // Telegram does not supply email; no email/username-based account merging occurs.
     sqlite.prepare('INSERT INTO auth_accounts(id,email,password_hash,created,gender) VALUES(?,?,?,?,?)').run(target,'telegram:'+proof.id,'!telegram-only',now(),b.gender);
     sqlite.prepare('INSERT INTO matchlove_profile_overrides(user,data) VALUES(?,?)').run(target,JSON.stringify({self:{name}}));
+    sqlite.prepare('INSERT INTO matchlove_birthdates(user,birthdate) VALUES(?,?)').run(target,b.birthdate);
    }
    if(!linked)sqlite.prepare('INSERT INTO auth_telegram_links(telegram_id,account,username,created) VALUES(?,?,?,?)').run(proof.id,target,proof.username,now());
    else sqlite.prepare('UPDATE auth_telegram_links SET username=? WHERE telegram_id=?').run(proof.username,proof.id);

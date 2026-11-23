@@ -1,10 +1,11 @@
+import {fullYears} from './birthdate.mjs';
 import {enqueueEmail} from './email-notifications.mjs';
 import {handleMatchAI} from './matchlove-ai.mjs';
 import {touchPresence,readPresence} from './chat-presence.mjs';
 import {randomUUID} from 'node:crypto';
 const J=(v,status=200)=>new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
 const name=(r)=>r.name||'Участник '+r.id.slice(0,6);
-const person=(r)=>({id:r.id,name:name(r),city:r.city||'',age:r.age_min||null});
+const person=(r)=>({id:r.id,name:name(r),city:r.city||'',age:fullYears(r.birthdate)??r.age_min??null});
 function checkBlocked(db,a,b){if(db.prepare('SELECT 1 FROM matchlove_account_bans WHERE user IN (?,?)').get(a,b))return true;return !!db.prepare('SELECT 1 FROM blocks WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)').get(a,b,b,a)}
 function status(db,a,b){const sent=!!db.prepare('SELECT 1 FROM likes WHERE sender=? AND recipient=?').get(a,b);const received=!!db.prepare('SELECT 1 FROM likes WHERE sender=? AND recipient=?').get(b,a);return {liked:sent,likedMe:received,matched:sent&&received}}
 export async function handleSocial(request,{sqlite:db,userId:id,apiKey,model}){
@@ -19,7 +20,7 @@ export async function handleSocial(request,{sqlite:db,userId:id,apiKey,model}){
   touchPresence(db,id,{client:body.client,active:body.active!==false,target,typing:body.typing});return J({ok:true});
  }
  if(path==='/api/ml-social'&&method==='GET'){
-  const rows=db.prepare("SELECT m.user AS id,COALESCE(NULLIF(json_extract(m.parsed,'$.self.name'),''),p.name,'') AS name,COALESCE(NULLIF(json_extract(m.parsed,'$.self.location'),''),p.city,'') AS city,CAST(json_extract(m.parsed,'$.self.age_min') AS INTEGER) AS age_min, (SELECT 1 FROM likes my WHERE my.sender=? AND my.recipient=m.user) AS liked, (SELECT 1 FROM likes theirs WHERE theirs.sender=m.user AND theirs.recipient=?) AS liked_me FROM matchlove_profiles m LEFT JOIN profiles p ON p.id=m.user WHERE m.user<>? AND NOT EXISTS(SELECT 1 FROM matchlove_account_bans ban WHERE ban.user=m.user) AND NOT EXISTS(SELECT 1 FROM blocks WHERE (sender=? AND recipient=m.user) OR (sender=m.user AND recipient=?)) AND (EXISTS(SELECT 1 FROM likes l WHERE l.sender=m.user AND l.recipient=?) OR EXISTS(SELECT 1 FROM likes l WHERE l.sender=? AND l.recipient=m.user)) ORDER BY m.updated DESC").all(id,id,id,id,id,id,id);
+  const rows=db.prepare("SELECT (SELECT birthdate FROM matchlove_birthdates WHERE user=m.user) AS birthdate,m.user AS id,COALESCE(NULLIF(json_extract(m.parsed,'$.self.name'),''),p.name,'') AS name,COALESCE(NULLIF(json_extract(m.parsed,'$.self.location'),''),p.city,'') AS city,CAST(json_extract(m.parsed,'$.self.age_min') AS INTEGER) AS age_min, (SELECT 1 FROM likes my WHERE my.sender=? AND my.recipient=m.user) AS liked, (SELECT 1 FROM likes theirs WHERE theirs.sender=m.user AND theirs.recipient=?) AS liked_me FROM matchlove_profiles m LEFT JOIN profiles p ON p.id=m.user WHERE m.user<>? AND NOT EXISTS(SELECT 1 FROM matchlove_account_bans ban WHERE ban.user=m.user) AND NOT EXISTS(SELECT 1 FROM blocks WHERE (sender=? AND recipient=m.user) OR (sender=m.user AND recipient=?)) AND (EXISTS(SELECT 1 FROM likes l WHERE l.sender=m.user AND l.recipient=?) OR EXISTS(SELECT 1 FROM likes l WHERE l.sender=? AND l.recipient=m.user)) ORDER BY m.updated DESC").all(id,id,id,id,id,id,id);
   const ranked=rows.length?await(await handleMatchAI(request,{sqlite:db,userId:id,apiKey,model,candidateIds:rows.map(r=>r.id),includeConflicts:true})).json():{results:[]};
   const scores=new Map((ranked.results||[]).map(p=>[p.id,p]));
   const incoming=[],matches=[],outgoing=[];

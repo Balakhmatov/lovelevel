@@ -12,7 +12,7 @@ test('Profiles support manual creation, protected AI merges, gallery access and 
  const dir=await mkdtemp(join(tmpdir(),'ml-profile-')),app=createServer({origin,dataDir:dir,secureCookies:false,registration:true});app.server.listen(0,'127.0.0.1');await once(app.server,'listening');const base='http://127.0.0.1:'+app.server.address().port;
  const call=(path,{method='GET',cookie,body,requestOrigin=origin}={})=>fetch(base+path,{method,headers:{Origin:requestOrigin,'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:body?JSON.stringify(body):undefined});
  try{
- const accounts=[];for(const [i,gender] of ['male','female'].entries()){const response=await call('/api/auth/register',{method:'POST',body:{name:'Тестовый участник',email:'profile'+i+'@test.example',password:'profile-test-password',gender,adult:true,terms:true}});assert.equal(response.status,201);accounts.push({cookie:response.headers.get('set-cookie').split(';')[0],id:app.sqlite.prepare('SELECT id FROM auth_accounts WHERE email=?').get('profile'+i+'@test.example').id});}
+ const accounts=[];for(const [i,gender] of ['male','female'].entries()){const response=await call('/api/auth/register',{method:'POST',body:{name:'Тестовый участник',birthdate:(new Date().getUTCFullYear()-28)+'-01-01',email:'profile'+i+'@test.example',password:'profile-test-password',gender,adult:true,terms:true}});assert.equal(response.status,201);accounts.push({cookie:response.headers.get('set-cookie').split(';')[0],id:app.sqlite.prepare('SELECT id FROM auth_accounts WHERE email=?').get('profile'+i+'@test.example').id});}
  const [a,b]=accounts;
  assert.equal((await call('/api/ml-profile')).status,401);
  assert.equal((await call('/api/ml-profile?user='+b.id,{cookie:a.cookie})).status,404);

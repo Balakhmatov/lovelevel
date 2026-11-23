@@ -11,7 +11,7 @@ test('Directional scores survive likes; confirmed habit conflicts stay visible u
  const call=(path,{method='GET',cookie,body,requestOrigin=origin}={})=>fetch(base+path,{method,headers:{Origin:requestOrigin,'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:body?JSON.stringify(body):undefined});
  try{
  const users=[];for(const [i,profile] of [mark,alice].entries()){
-  const r=await call('/api/auth/register',{method:'POST',body:{name:'Тестовый участник',email:'direction'+i+'@test.example',password:'directional-search-password',gender:profile.self.gender,adult:true,terms:true}});assert.equal(r.status,201);const cookie=r.headers.get('set-cookie').split(';')[0],id=app.sqlite.prepare('SELECT id FROM auth_accounts WHERE email=?').get('direction'+i+'@test.example').id;
+  const r=await call('/api/auth/register',{method:'POST',body:{name:'Тестовый участник',birthdate:(new Date().getUTCFullYear()-profile.self.age_min)+'-01-01',email:'direction'+i+'@test.example',password:'directional-search-password',gender:profile.self.gender,adult:true,terms:true}});assert.equal(r.status,201);const cookie=r.headers.get('set-cookie').split(';')[0],id=app.sqlite.prepare('SELECT id FROM auth_accounts WHERE email=?').get('direction'+i+'@test.example').id;
   app.sqlite.prepare('INSERT INTO matchlove_profiles VALUES(?,?,?,?)').run(id,'Saved original description '.repeat(5),JSON.stringify(profile),'first');app.sqlite.prepare('INSERT INTO matchlove_photos(id,user,mime,data,is_main,created) VALUES(?,?,?,?,?,?)').run('photo-'+i,id,'image/webp',Buffer.from('test-photo'),1,'first');users.push({id,cookie});
  }
  const [a,b]=users;
