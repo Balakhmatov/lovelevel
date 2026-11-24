@@ -274,3 +274,6 @@ html.in-conversation,.in-conversation body,.in-conversation body::before{backgro
 .match-carousel .person-info{grid-template-columns:minmax(0,1fr)}.match-carousel .person{cursor:grab}.match-carousel .cardgrid.is-dragging,.match-carousel .cardgrid.is-dragging *{cursor:grabbing!important}.match-carousel .person-info>.btn{min-width:0;overflow:hidden}@media(max-width:740px){.match-carousel .person-info>.btn{padding-left:6px;padding-right:6px}}
 
 .birthdate-hint{font-size:11px;font-weight:400;color:var(--muted);line-height:1.5}#auth input[type=date]{min-width:0;max-width:100%;appearance:none;-webkit-appearance:none}#auth input[type=date]::-webkit-date-and-time-value{text-align:left}
+
+/* Keep the complete category dictionary within a scrollable suggestion list. */
+.profile-tag-suggestions{display:flex;flex-direction:column;flex-wrap:nowrap;gap:4px;max-height:320px;max-height:min(320px,45dvh);overflow-y:auto;overscroll-behavior-y:contain;scrollbar-width:thin;scrollbar-color:var(--green) #241b22;padding:4px 8px 4px 2px;touch-action:pan-y}.profile-tag-suggestions button{flex-shrink:0;width:100%;min-height:38px;padding:9px 12px}

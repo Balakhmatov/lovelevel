@@ -26,6 +26,6 @@ export async function handleTagSuggestions(request,{sqlite}){
  const usage=COMMON_TAG_CATEGORIES.includes(category)?sqlite.prepare('SELECT tag,COUNT(DISTINCT user) AS count FROM matchlove_category_tag_usage WHERE category=? GROUP BY tag').all(category):[];
  const rows=new Map(CATEGORY_TAGS[category].map((label,index)=>[norm(label),{label,popularity:0,index}]));
  for(const r of usage)if(safe(r.tag)){const old=rows.get(norm(r.tag));if(old||r.count>=MIN_TAG_USERS)rows.set(norm(r.tag),{label:old?.label||r.tag,popularity:r.count,index:old?.index??10000});}
- const matches=[...rows.values()].map(row=>({...row,key:norm(row.label)})).filter(row=>tagMatches(row.label,context)).sort((a,b)=>b.popularity-a.popularity||Number(b.key.startsWith(query))-Number(a.key.startsWith(query))||a.index-b.index).slice(0,plain?12:6);
+ const matches=[...rows.values()].map(row=>({...row,key:norm(row.label)})).filter(row=>tagMatches(row.label,context)).sort((a,b)=>b.popularity-a.popularity||Number(b.key.startsWith(query))-Number(a.key.startsWith(query))||a.index-b.index).slice(0,plain?undefined:6);
  return json({suggestions:matches.map(row=>({label:row.label,text:suggestionText(row.label,context,plain)}))});
 }

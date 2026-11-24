@@ -42,6 +42,7 @@ test('Expanded dictionary finds synonym variants, preserves negation and ranks e
  const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE matchlove_tag_usage(user TEXT,tag TEXT,PRIMARY KEY(user,tag));CREATE TABLE matchlove_category_tag_usage(user TEXT,category TEXT,tag TEXT,PRIMARY KEY(user,category,tag));');
  const get=async(q,category='interests')=>(await(await handleTagSuggestions(new Request('http://localhost/api/tag-suggestions',{method:'POST',headers:{Origin:'http://localhost','Content-Type':'application/json'},body:JSON.stringify({q,category,format:'tag'})}),{sqlite:db})).json()).suggestions;
  try{const {CATEGORY_TAGS}=await import('../server/category-tags.mjs');assert(Object.values(CATEGORY_TAGS).flat().length>=1500);assert(CATEGORY_TAGS.goal.length>=80);
+  assert.equal((await get('')).length,CATEGORY_TAGS.interests.length,'Profile suggestions include the entire dictionary for scrolling');
   let found=await get('собак');assert(found.some(s=>s.label==='люблю собак'));assert(found.some(s=>s.label==='обожаю собак'));
   found=await get('обожаю собак');assert(found.some(s=>s.label==='люблю собак'));assert(found.some(s=>s.label==='обожаю собак'));
   updateTagUsage(db,'seed-user',{self:{interests:['обожаю собак']}});found=await get('собак');assert.equal(found[0].label,'обожаю собак');assert.equal((await get(''))[0].label,'обожаю собак');
